@@ -7,7 +7,7 @@ import {
 import { StatusBar } from 'expo-status-bar';
 
 export default function AccountCredentials({ navigation, route }) {
-  const { fName, lName, cpNo, role = 'user' } = route.params;
+  const { first_Name, last_Name, cp_No, schoolId, credentialsFile = 'user' } = route.params;
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const remarks = 'active';
@@ -16,54 +16,55 @@ export default function AccountCredentials({ navigation, route }) {
   const [passwordError, setPasswordError] = useState('');
 
   const validateEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-  const validatePassword = (password) =>
-    /^(?=.*[A-Za-z])(?=.*\d|.*[^A-Za-z\d])[\S]{8,}$/.test(password);
+  const validatePassword = (password) => password.length >= 8;
 
   const handleRegister = async () => {
     setEmailError('');
     setPasswordError('');
-
     let valid = true;
 
     if (!email.trim()) {
-      setEmailError('Fill this out');
+      setEmailError('Required');
       valid = false;
     } else if (!validateEmail(email)) {
-      setEmailError('Please enter a valid email');
+      setEmailError('Invalid email');
       valid = false;
     }
 
     if (!password.trim()) {
-      setPasswordError('Fill this out');
+      setPasswordError('Required');
       valid = false;
     } else if (!validatePassword(password)) {
-      setPasswordError('Password must be at least 8 characters and contain letters + numbers or symbols');
+      setPasswordError('Min 8 characters');
       valid = false;
     }
 
     if (!valid) return;
 
-    const body = {
-      f_name: fName,
-      l_name: lName,
-      cp_no: cpNo,
-      role,
-      email,
-      password,
-      remarks,
-    };
+    const formData = new FormData();
+    formData.append('first_name', route.params.first_name);
+    formData.append('last_name', route.params.last_name);
+    formData.append('cp_no', route.params.cp_no);
+    formData.append('school_id', route.params.school_id);
+    formData.append('email', email);
+    formData.append('password', password);
+    formData.append('credentials', {
+      uri: route.params.credentialsFile.uri,
+      name: route.params.credentialsFile.name,
+      type: route.params.credentialsFile.mimeType || 'application/pdf',
+});
+
 
     try {
-      const response = await fetch('http://192.168.250.53/koncepto-app/api/register.php', {
+      const response = await fetch('http://192.168.1.13/koncepto-app/api/register.php', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
+        body: formData,
+        // IMPORTANT: DO NOT set 'Content-Type' manually
       });
 
       const result = await response.json();
-
       if (result.success) {
-        Alert.alert('Success', 'Account created. Please login.', [
+        Alert.alert('Success', 'Account created.', [
           { text: 'OK', onPress: () => navigation.navigate('Login') },
         ]);
       } else {
@@ -71,44 +72,37 @@ export default function AccountCredentials({ navigation, route }) {
       }
     } catch (error) {
       console.log('Fetch error:', error);
-      Alert.alert('Error', 'Server connection failed.');
+      Alert.alert('Error', 'Server error.');
     }
   };
 
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-    >
+    <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
         <View style={styles.inner}>
           <Text style={styles.title}>Set Email and Password</Text>
 
-          {emailError ? <Text style={styles.errorText}>{emailError}</Text> : null}
           <TextInput
-            style={[styles.input, emailError ? styles.inputError : null]}
+            style={[styles.input, emailError && styles.inputError]}
             placeholder="Email"
-            keyboardType="email-address"
-            autoCapitalize="none"
             value={email}
             onChangeText={setEmail}
+            keyboardType="email-address"
+            autoCapitalize="none"
           />
+          {emailError && <Text style={styles.errorText}>{emailError}</Text>}
 
-          {passwordError ? <Text style={styles.errorText}>{passwordError}</Text> : null}
           <TextInput
-            style={[styles.input, passwordError ? styles.inputError : null]}
+            style={[styles.input, passwordError && styles.inputError]}
             placeholder="Password"
-            secureTextEntry
             value={password}
             onChangeText={setPassword}
+            secureTextEntry
           />
+          {passwordError && <Text style={styles.errorText}>{passwordError}</Text>}
 
           <TouchableOpacity style={styles.registerButton} onPress={handleRegister}>
             <Text style={styles.registerText}>Register</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity onPress={() => navigation.goBack()}>
-            <Text style={styles.backLink}>Back to Personal Details</Text>
           </TouchableOpacity>
 
           <StatusBar style="auto" />
@@ -122,7 +116,7 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   inner: { flex: 1, justifyContent: 'center', padding: 30, backgroundColor: '#fff' },
   title: { fontSize: 24, fontWeight: 'bold', marginBottom: 20, textAlign: 'center' },
-  errorText: { color: 'red', fontSize: 12, marginBottom: 5, marginLeft: 5 },
+  errorText: { color: 'red', fontSize: 12, marginBottom: 5 },
   input: {
     height: 45,
     borderBottomWidth: 1,
@@ -139,9 +133,4 @@ const styles = StyleSheet.create({
     marginTop: 20,
   },
   registerText: { color: '#fff', fontWeight: 'bold' },
-  backLink: {
-    marginTop: 15,
-    textAlign: 'center',
-    color: '#58B32D',
-  },
 });

@@ -18,7 +18,7 @@ const ProductList = ({ navigation, route }) => {
   const [loading, setLoading] = useState(true);
   const [showFilter, setShowFilter] = useState(false);
 
-  const API_BASE = 'http://192.168.250.53/koncepto-app/api';
+  const API_BASE = 'http://192.168.1.13/koncepto-app/api';
 
   useEffect(() => {
     fetchProducts();
@@ -64,7 +64,7 @@ const ProductList = ({ navigation, route }) => {
   <TouchableOpacity onPress={() => navigation.navigate('ProductDetail', { product: item })}>
     <View style={styles.card}>
       <Image
-        source={{ uri: `http://192.168.250.53/koncepto-app/assets/${item.image}` }}
+        source={{ uri: `http://192.168.1.13/koncepto-app/assets/${item.image}` }}
         style={styles.image}
       />
       <Text style={styles.name}>{item.productName}</Text>

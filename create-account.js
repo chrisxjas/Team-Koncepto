@@ -1,19 +1,34 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   StyleSheet, Text, View, TextInput,
   TouchableOpacity, KeyboardAvoidingView, Platform,
-  Keyboard, TouchableWithoutFeedback, Alert
+  Keyboard, TouchableWithoutFeedback
 } from 'react-native';
+import { Picker } from '@react-native-picker/picker';
+import * as DocumentPicker from 'expo-document-picker';
 import { StatusBar } from 'expo-status-bar';
 
-export default function PersonalDetails({ navigation }) {
-  const [fName, setFName] = useState('');
-  const [lName, setLName] = useState('');
+export default function CreateAccount({ navigation }) {
+  const [first_Name, setFirst_Name] = useState('');
+  const [last_Name, setLast_Name] = useState('');
   const [cpNo, setCpNo] = useState('');
+  const [schools, setSchools] = useState([]);
+  const [selectedSchool, setSelectedSchool] = useState('');
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [errors, setErrors] = useState({});
 
-  const [fNameError, setFNameError] = useState('');
-  const [lNameError, setLNameError] = useState('');
-  const [cpNoError, setCpNoError] = useState('');
+  useEffect(() => {
+    const fetchSchools = async () => {
+      try {
+        const response = await fetch('http://192.168.1.13/koncepto-app/api/get-schools.php');
+        const data = await response.json();
+        setSchools(data);
+      } catch (error) {
+        console.error('Failed to fetch schools:', error);
+      }
+    };
+    fetchSchools();
+  }, []);
 
   const formatCpNo = (text) => {
     const digits = text.replace(/\D/g, '').slice(0, 11);
@@ -26,83 +41,89 @@ export default function PersonalDetails({ navigation }) {
     setCpNo(formatCpNo(text));
   };
 
-  const handleNext = () => {
-    let valid = true;
-
-    setFNameError('');
-    setLNameError('');
-    setCpNoError('');
-
-    if (!fName.trim()) {
-      setFNameError('Fill this out');
-      valid = false;
-    }
-
-    if (!lName.trim()) {
-      setLNameError('Fill this out');
-      valid = false;
-    }
-
-    const rawCpNo = cpNo.replace(/\D/g, '');
-    if (!rawCpNo) {
-      setCpNoError('Fill this out');
-      valid = false;
-    } else if (rawCpNo.length !== 11) {
-      setCpNoError('Contact number must be exactly 11 digits');
-      valid = false;
-    }
-
-    if (!valid) return;
-
-    // Navigate with unformatted number (optional: store formatted version instead)
-    navigation.navigate('AccountCredentials', {
-      fName: fName.trim(),
-      lName: lName.trim(),
-      cpNo: rawCpNo,
+  const pickFile = async () => {
+    const result = await DocumentPicker.getDocumentAsync({
+      type: ['application/pdf', 'image/jpeg', 'image/png'],
     });
+    if (result.assets && result.assets.length > 0) {
+      setSelectedFile(result.assets[0]);
+    }
+  };
+
+  const handleNext = () => {
+    const rawCpNo = cpNo.replace(/\D/g, '');
+    const newErrors = {};
+    if (!first_Name.trim()) newErrors.first_Name = 'Required';
+    if (!last_Name.trim()) newErrors.last_Name = 'Required';
+    if (!rawCpNo || rawCpNo.length !== 11) newErrors.cpNo = 'Enter valid 11-digit number';
+    if (!selectedSchool) newErrors.school = 'Select a school';
+    if (!selectedFile) newErrors.file = 'Select a file';
+
+    setErrors(newErrors);
+
+    if (Object.keys(newErrors).length === 0) {
+      navigation.navigate('AccountCredentials', {
+        first_name: first_Name.trim(),
+        last_name: last_Name.trim(),
+        cp_no: rawCpNo,
+        school_id: selectedSchool,
+        credentialsFile: selectedFile,
+      });
+    }
   };
 
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-    >
+    <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
         <View style={styles.inner}>
-          <Text style={styles.title}>Enter Personal Details</Text>
+          <Text style={styles.title}>Create Account</Text>
 
-          {fNameError ? <Text style={styles.errorText}>{fNameError}</Text> : null}
           <TextInput
-            style={[styles.input, fNameError ? styles.inputError : null]}
+            style={[styles.input, errors.first_Name && styles.inputError]}
             placeholder="First Name"
-            value={fName}
-            onChangeText={setFName}
+            value={first_Name}
+            onChangeText={setFirst_Name}
           />
+          {errors.first_Name && <Text style={styles.errorText}>{errors.first_Name}</Text>}
 
-          {lNameError ? <Text style={styles.errorText}>{lNameError}</Text> : null}
           <TextInput
-            style={[styles.input, lNameError ? styles.inputError : null]}
+            style={[styles.input, errors.last_Name && styles.inputError]}
             placeholder="Last Name"
-            value={lName}
-            onChangeText={setLName}
+            value={last_Name}
+            onChangeText={setLast_Name}
           />
+          {errors.last_Name && <Text style={styles.errorText}>{errors.last_Name}</Text>}
 
-          {cpNoError ? <Text style={styles.errorText}>{cpNoError}</Text> : null}
           <TextInput
-            style={[styles.input, cpNoError ? styles.inputError : null]}
-            placeholder="Contact No. (11 digits)"
+            style={[styles.input, errors.cpNo && styles.inputError]}
+            placeholder="Contact Number"
             value={cpNo}
             onChangeText={handleCpNoChange}
             keyboardType="number-pad"
-            maxLength={13} // includes dashes
+            maxLength={13}
           />
+          {errors.cpNo && <Text style={styles.errorText}>{errors.cpNo}</Text>}
+
+          <View style={[styles.dropdown, errors.school && styles.inputError]}>
+            <Picker
+              selectedValue={selectedSchool}
+              onValueChange={(value) => setSelectedSchool(value)}
+            >
+              <Picker.Item label="Select School" value="" />
+              {schools.map((school) => (
+                <Picker.Item key={school.id} label={school.school_name} value={school.id} />
+              ))}
+            </Picker>
+          </View>
+          {errors.school && <Text style={styles.errorText}>{errors.school}</Text>}
+
+          <TouchableOpacity style={styles.filePicker} onPress={pickFile}>
+            <Text>{selectedFile ? selectedFile.name : 'Select File'}</Text>
+          </TouchableOpacity>
+          {errors.file && <Text style={styles.errorText}>{errors.file}</Text>}
 
           <TouchableOpacity style={styles.nextButton} onPress={handleNext}>
             <Text style={styles.nextText}>Next</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity onPress={() => navigation.goBack()}>
-            <Text style={styles.backLink}>Back to Login</Text>
           </TouchableOpacity>
 
           <StatusBar style="auto" />
@@ -116,7 +137,7 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   inner: { flex: 1, justifyContent: 'center', padding: 30, backgroundColor: '#fff' },
   title: { fontSize: 24, fontWeight: 'bold', marginBottom: 20, textAlign: 'center' },
-  errorText: { color: 'red', fontSize: 12, marginBottom: 5, marginLeft: 5 },
+  errorText: { color: 'red', fontSize: 12, marginBottom: 5 },
   input: {
     height: 45,
     borderBottomWidth: 1,
@@ -125,17 +146,24 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
   },
   inputError: { borderBottomColor: 'red' },
+  dropdown: {
+    borderWidth: 1,
+    borderColor: '#999',
+    borderRadius: 4,
+    marginBottom: 15,
+  },
+  filePicker: {
+    borderWidth: 1,
+    borderColor: '#999',
+    borderRadius: 4,
+    padding: 12,
+    marginBottom: 20,
+  },
   nextButton: {
     backgroundColor: '#58B32D',
     paddingVertical: 12,
     borderRadius: 8,
     alignItems: 'center',
-    marginTop: 20,
   },
   nextText: { color: '#fff', fontWeight: 'bold' },
-  backLink: {
-    marginTop: 15,
-    textAlign: 'center',
-    color: '#58B32D',
-  },
 });

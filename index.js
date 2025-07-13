@@ -62,22 +62,28 @@ function LoginScreen({ navigation }) {
     if (!valid) return;
 
     try {
-      const response = await fetch('http://192.168.250.53/koncepto-app/api/login.php', {
+      const response = await fetch('http://192.168.1.13/koncepto-app/api/login.php', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({
+          email: email.trim(),
+          password: password.trim()
+        }),
       });
 
       const result = await response.json();
       console.log("Server result:", result);
 
-      if (result.success) {
+      if (result.success && result.user) {
         navigation.navigate('ProductList', { user: result.user });
       } else {
         console.log("Login failed reason:", result.message);
         if (result.message === 'Incorrect password') {
           setPasswordError('Incorrect password');
-        } else if (result.message === 'Email not found') {
+        } else if (
+          result.message.toLowerCase().includes('email not found') ||
+          result.message.toLowerCase().includes('not found')
+        ) {
           Alert.alert(
             'Account Not Found',
             "Haven't got an account yet?",
@@ -87,7 +93,7 @@ function LoginScreen({ navigation }) {
             ]
           );
         } else {
-          Alert.alert('Login Failed', 'Something went wrong.');
+          Alert.alert('Login Failed', result.message || 'Something went wrong.');
         }
       }
     } catch (error) {

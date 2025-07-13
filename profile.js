@@ -66,7 +66,7 @@ export default function Profile({ route, navigation }) {
 
       formData.append('user_id', user.id);
 
-      const response = await fetch('http://192.168.250.53/koncepto-app/api/upload-profile-image.php', {
+      const response = await fetch('http://192.168.1.13/koncepto-app/api/upload-profile-image.php', {
         method: 'POST',
         headers: {
           'Content-Type': 'multipart/form-data',
@@ -108,7 +108,7 @@ export default function Profile({ route, navigation }) {
           onPress: async () => {
             try {
               const response = await fetch(
-                `http://192.168.250.53/koncepto-app/api/delete-profile-image.php?user_id=${user.id}`,
+                `http://192.168.1.13192.168.1.13/koncepto-app/api/delete-profile-image.php?user_id=${user.id}`,
               );
               const resJson = await response.json();
               if (resJson.success) {
@@ -133,7 +133,7 @@ export default function Profile({ route, navigation }) {
           <TouchableOpacity onPress={() => setModalVisible(true)} style={styles.profileIcon}>
             {user.image_url ? (
               <Image
-                source={{ uri: `http://192.168.250.53/koncepto-app/uploads/${user.image_url}` }}
+                source={{ uri: `http://192.168.1.13/koncepto-app/uploads/${user.image_url}` }}
                 style={styles.profileImage}
               />
             ) : (
@@ -141,7 +141,7 @@ export default function Profile({ route, navigation }) {
             )}
           </TouchableOpacity>
           <View style={{ flex: 1 }}>
-            <Text style={styles.name}>{user.f_name ?? 'First Name'} {user.l_name ?? 'Last Name'}</Text>
+            <Text style={styles.name}>{user.first_name ?? 'First Name'} {user.last_name ?? 'Last Name'}</Text>
             <Text style={styles.school}>{user.role ? `Role: ${user.role}` : 'Role: User'}</Text>
             <Text style={styles.email}>{user.email ?? 'email@example.com'}</Text>
           </View>

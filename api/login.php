@@ -4,7 +4,7 @@ header("Access-Control-Allow-Origin: *");
 header("Access-Control-Allow-Methods: POST");
 header("Access-Control-Allow-Headers: Content-Type");
 
-$conn = new mysqli("localhost", "root", "", "koncepto_db");
+$conn = new mysqli("localhost", "root", "", "koncepto1");
 
 if ($conn->connect_error) {
     echo json_encode(["success" => false, "message" => "Database connection failed"]);
@@ -29,18 +29,19 @@ if ($result->num_rows === 1) {
     $user = $result->fetch_assoc();
     $storedPassword = $user['password'];
 
+    // If you're using password_hash() for storing passwords, use password_verify() here instead:
+    // if (password_verify($password, $storedPassword)) {
     if ($password === $storedPassword) {
         echo json_encode([
             "success" => true,
             "user" => [
                 "id" => $user["id"],
-                "f_name" => $user["f_name"],
-                "l_name" => $user["l_name"],
+                "first_name" => $user["first_name"],
+                "last_name" => $user["last_name"],
                 "email" => $user["email"],
                 "role" => $user["role"],
-                "remarks" => $user["remarks"],
-                "image_url" => $user["image_url"] ?? null,
-                "date_joined" => $user["date_joined"]
+                "school_id" => $user["school_id"],
+                "date_joined" => $user["created_at"]
             ]
         ]);
     } else {
