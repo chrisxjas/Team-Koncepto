@@ -28,6 +28,8 @@ import AccountCredentials from './accountcredentials';
 import Message from './message';
 import Profile from './profile';
 import ProductDetail from './product-detail';
+import Carts from './carts'; // make sure the path is correct
+
 
 const Stack = createNativeStackNavigator();
 
@@ -174,6 +176,7 @@ function App() {
         <Stack.Screen name="Message" component={Message} options={{ headerShown: false }} />
         <Stack.Screen name="Profile" component={Profile} options={{ headerShown: false }} />
         <Stack.Screen name="ProductDetail" component={ProductDetail} />
+        <Stack.Screen name="Carts" component={Carts} />
       </Stack.Navigator>
     </NavigationContainer>
   );

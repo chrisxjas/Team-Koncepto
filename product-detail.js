@@ -1,3 +1,4 @@
+// ProductDetail.js
 import React, { useState } from 'react';
 import {
   View, Text, Image, StyleSheet, TouchableOpacity,
@@ -7,7 +8,6 @@ import { Ionicons } from '@expo/vector-icons';
 
 const ProductDetail = ({ route, navigation }) => {
   const { product, user } = route.params || {};
-
   const [quantity, setQuantity] = useState(1);
   const [showModal, setShowModal] = useState(false);
 
@@ -17,20 +17,23 @@ const ProductDetail = ({ route, navigation }) => {
       return;
     }
 
+    const payload = {
+      user_id: user.id,
+      product_id: product.id,
+      quantity: Number(quantity),
+      replace: false
+    };
+
     fetch('http://192.168.1.13/koncepto-app/api/add-to-cart.php', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        user_id: user.id,
-        product_id: product.id,
-        quantity: quantity,
-      }),
+      body: JSON.stringify(payload),
     })
       .then(res => res.json())
       .then(data => {
         if (data.success) {
           setShowModal(false);
-          navigation.navigate('Cart', { user });
+          navigation.replace('Carts', { user }); // 👈 go to Carts screen
         } else {
           Alert.alert('Error', data.message || 'Failed to add to cart.');
         }

@@ -22,27 +22,45 @@ export default function Profile({ route, navigation }) {
   const [selected2, setSelected2] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [settingsVisible, setSettingsVisible] = useState(false);
+  const [activeTab, setActiveTab] = useState('Profile');
+
+  const fetchUserData = async () => {
+    try {
+      const response = await fetch(`http://192.168.1.13/koncepto-app/api/get-user.php?id=${userFromParams.id}`);
+      const resJson = await response.json();
+      if (resJson.success && resJson.user) {
+        setUser(resJson.user);
+      }
+    } catch (err) {
+      console.log('Failed to fetch user:', err);
+    }
+  };
 
   useEffect(() => {
     (async () => {
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (status !== 'granted') {
-        Alert.alert('Permission required', 'Permission to access media library is required!');
+        Alert.alert('Permission required', 'Media library access is needed to upload your photo.');
       }
+      await fetchUserData();
     })();
   }, []);
 
   const pickImage = async () => {
     try {
-      let result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaType.Images,
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
         quality: 1,
         allowsEditing: true,
         aspect: [1, 1],
       });
 
-      if (!result.canceled && result.assets?.length > 0) {
-        uploadImage(result.assets[0].uri);
+      if (!result.canceled && result.assets.length > 0) {
+        const selectedAsset = result.assets[0];
+        if (selectedAsset.uri) {
+          uploadImage(selectedAsset.uri);
+        }
       }
     } catch (e) {
       Alert.alert('Error', 'Failed to pick image.');
@@ -51,20 +69,18 @@ export default function Profile({ route, navigation }) {
 
   const uploadImage = async (uri) => {
     setUploading(true);
-
     try {
-      const formData = new FormData();
       const filename = uri.split('/').pop();
       const match = /\.(\w+)$/.exec(filename);
       const type = match ? `image/${match[1]}` : `image`;
 
+      const formData = new FormData();
       formData.append('photo', {
         uri,
         name: filename,
         type,
       });
-
-      formData.append('user_id', user.id);
+      formData.append('id', user.id);
 
       const response = await fetch('http://192.168.1.13/koncepto-app/api/upload-profile-image.php', {
         method: 'POST',
@@ -75,24 +91,18 @@ export default function Profile({ route, navigation }) {
       });
 
       const resJson = await response.json();
-
-      if (resJson.success && resJson.image_url) {
-        setUser((prev) => ({ ...prev, image_url: resJson.image_url }));
+      if (resJson.success && resJson.profilepic) {
+        setUser((prev) => ({ ...prev, profilepic: resJson.profilepic }));
         Alert.alert('Success', 'Profile picture updated.');
       } else {
-        Alert.alert('Upload failed', resJson.message || 'Unknown error');
+        Alert.alert('Upload failed', resJson.message || 'Something went wrong.');
       }
     } catch (error) {
-      Alert.alert('Upload error', 'Failed to upload image.');
+      Alert.alert('Error', 'Failed to upload profile picture.');
     } finally {
       setUploading(false);
       setModalVisible(false);
     }
-  };
-
-  const handleEditPicture = () => {
-    setModalVisible(false);
-    pickImage();
   };
 
   const handleDeletePicture = () => {
@@ -107,12 +117,10 @@ export default function Profile({ route, navigation }) {
           style: 'destructive',
           onPress: async () => {
             try {
-              const response = await fetch(
-                `http://192.168.1.13192.168.1.13/koncepto-app/api/delete-profile-image.php?user_id=${user.id}`,
-              );
+              const response = await fetch(`http://192.168.1.13/koncepto-app/api/delete-profile-image.php?user_id=${user.id}`);
               const resJson = await response.json();
               if (resJson.success) {
-                setUser((prev) => ({ ...prev, image_url: null }));
+                setUser((prev) => ({ ...prev, profilepic: null }));
                 Alert.alert('Deleted', 'Profile picture deleted.');
               } else {
                 Alert.alert('Error', resJson.message || 'Could not delete profile picture.');
@@ -122,7 +130,7 @@ export default function Profile({ route, navigation }) {
             }
           },
         },
-      ],
+      ]
     );
   };
 
@@ -131,9 +139,9 @@ export default function Profile({ route, navigation }) {
       <ScrollView style={styles.container}>
         <View style={styles.header}>
           <TouchableOpacity onPress={() => setModalVisible(true)} style={styles.profileIcon}>
-            {user.image_url ? (
+            {user.profilepic ? (
               <Image
-                source={{ uri: `http://192.168.1.13/koncepto-app/uploads/${user.image_url}` }}
+                source={{ uri: `http://192.168.1.13/koncepto-app/api/uploads/${user.profilepic}?t=${Date.now()}` }}
                 style={styles.profileImage}
               />
             ) : (
@@ -142,10 +150,10 @@ export default function Profile({ route, navigation }) {
           </TouchableOpacity>
           <View style={{ flex: 1 }}>
             <Text style={styles.name}>{user.first_name ?? 'First Name'} {user.last_name ?? 'Last Name'}</Text>
-            <Text style={styles.school}>{user.role ? `Role: ${user.role}` : 'Role: User'}</Text>
+            <Text style={styles.school}>{user.school_name ? `${user.school_name}` : 'School: N/A'}</Text>
             <Text style={styles.email}>{user.email ?? 'email@example.com'}</Text>
           </View>
-          <TouchableOpacity style={styles.settingsIcon}>
+          <TouchableOpacity style={styles.settingsIcon} onPress={() => setSettingsVisible(true)}>
             <Ionicons name="settings-outline" size={24} color="white" />
           </TouchableOpacity>
         </View>
@@ -160,8 +168,7 @@ export default function Profile({ route, navigation }) {
             <View style={styles.row}>
               <Ionicons name="calendar-outline" size={24} />
               <Text style={styles.recommendText}>
-                on every <Text style={styles.bold}>MARCH</Text> of two consecutive years you’ve purchased these
-                items:
+                on every <Text style={styles.bold}>MARCH</Text> of two consecutive years you’ve purchased these items:
               </Text>
             </View>
 
@@ -228,19 +235,46 @@ export default function Profile({ route, navigation }) {
       </ScrollView>
 
       <View style={styles.bottomNav}>
-        <TouchableOpacity onPress={() => navigation.navigate('ProductList', { user })}>
+        <TouchableOpacity
+          onPress={() => {
+            setActiveTab('Home');
+            navigation.navigate('ProductList', { user });
+          }}
+          style={[styles.navButton, activeTab === 'Home' && styles.activeButton]}
+        >
           <Ionicons name="home" size={24} color="#fff" />
           <Text style={styles.navLabel}>Home</Text>
         </TouchableOpacity>
-        <TouchableOpacity onPress={() => navigation.navigate('Message')}>
+
+        <TouchableOpacity
+          onPress={() => {
+            setActiveTab('Message');
+            navigation.navigate('Message', { user });
+          }}
+          style={[styles.navButton, activeTab === 'Message' && styles.activeButton]}
+        >
           <Ionicons name="chatbubble-ellipses" size={24} color="#fff" />
           <Text style={styles.navLabel}>Chat</Text>
         </TouchableOpacity>
-        <TouchableOpacity>
+
+        <TouchableOpacity
+          onPress={() => {
+            setActiveTab('Cart');
+            navigation.navigate('Carts', { user });
+          }}
+          style={[styles.navButton, activeTab === 'Cart' && styles.activeButton]}
+        >
           <Ionicons name="cart" size={24} color="#fff" />
           <Text style={styles.navLabel}>Cart</Text>
         </TouchableOpacity>
-        <TouchableOpacity onPress={() => navigation.navigate('Profile', { user })}>
+
+        <TouchableOpacity
+          onPress={() => {
+            setActiveTab('Profile');
+            navigation.navigate('Profile', { user });
+          }}
+          style={[styles.navButton, activeTab === 'Profile' && styles.activeButton]}
+        >
           <Ionicons name="person" size={24} color="#fff" />
           <Text style={styles.navLabel}>Account</Text>
         </TouchableOpacity>
@@ -253,7 +287,7 @@ export default function Profile({ route, navigation }) {
               <ActivityIndicator size="large" color="#4CAF50" />
             ) : (
               <>
-                <TouchableOpacity onPress={handleEditPicture} style={styles.modalButton}>
+                <TouchableOpacity onPress={pickImage} style={styles.modalButton}>
                   <Text style={styles.modalButtonText}>Edit Profile Picture</Text>
                 </TouchableOpacity>
                 <TouchableOpacity onPress={handleDeletePicture} style={[styles.modalButton, { borderTopWidth: 1, borderTopColor: '#ccc' }]}>
@@ -264,6 +298,46 @@ export default function Profile({ route, navigation }) {
                 </TouchableOpacity>
               </>
             )}
+          </View>
+        </Pressable>
+      </Modal>
+
+      <Modal animationType="slide" transparent={true} visible={settingsVisible} onRequestClose={() => setSettingsVisible(false)}>
+        <Pressable style={styles.modalOverlay} onPress={() => setSettingsVisible(false)}>
+          <View style={styles.modalView}>
+            {[
+              { label: 'My Profile', action: () => navigation.navigate('MyProfile', { user }) },
+              { label: 'Account Options', action: () => navigation.navigate('AccountOptions', { user }) },
+              { label: 'Personalization', action: () => navigation.navigate('Personalization') },
+              { label: 'Help Center', action: () => navigation.navigate('HelpCenter') },
+              { label: 'Community Rules', action: () => navigation.navigate('CommunityRules') },
+              {
+                label: 'Log Out',
+                action: () => {
+                  setSettingsVisible(false);
+                  Alert.alert('Confirm Log Out', 'Are you sure you want to log out?', [
+                    { text: 'Cancel', style: 'cancel' },
+                    {
+                      text: 'Log Out',
+                      style: 'destructive',
+                      onPress: () => navigation.reset({ index: 0, routes: [{ name: 'Login' }] }),
+                    },
+                  ]);
+                },
+                isDanger: true,
+              },
+            ].map((item, idx) => (
+              <TouchableOpacity
+                key={idx}
+                style={[styles.modalButton, idx !== 0 && { borderTopWidth: 1, borderTopColor: '#ccc' }]}
+                onPress={() => {
+                  setSettingsVisible(false);
+                  item.action();
+                }}
+              >
+                <Text style={[styles.modalButtonText, item.isDanger && { color: 'red' }]}>{item.label}</Text>
+              </TouchableOpacity>
+            ))}
           </View>
         </Pressable>
       </Modal>
@@ -388,5 +462,14 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 12,
     textAlign: 'center',
+  },
+  navButton: {
+    alignItems: 'center',
+    padding: 8,
+    borderRadius: 10,
+  },
+  activeButton: {
+    borderColor: '#fff',
+    borderWidth: 2,
   },
 });

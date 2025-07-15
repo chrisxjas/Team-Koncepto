@@ -11,14 +11,28 @@ const CARD_WIDTH = (width - 32) / 2;
 
 const ProductList = ({ navigation, route }) => {
   const { user } = route.params;
+  const [activeTab, setActiveTab] = useState('Home'); // ✅ ACTIVE TAB STATE
   const [products, setProducts] = useState([]);
   const [filteredProducts, setFilteredProducts] = useState([]);
   const [categories, setCategories] = useState([]);
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [loading, setLoading] = useState(true);
   const [showFilter, setShowFilter] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
 
   const API_BASE = 'http://192.168.1.13/koncepto-app/api';
+
+  const handleSearch = (text) => {
+    setSearchQuery(text);
+    const lowercased = text.toLowerCase();
+    let filtered = products.filter(product =>
+      product.productName.toLowerCase().includes(lowercased)
+    );
+    if (selectedCategory !== null) {
+      filtered = filtered.filter(p => p.category_id === selectedCategory.toString());
+    }
+    setFilteredProducts(filtered);
+  };
 
   useEffect(() => {
     fetchProducts();
@@ -52,27 +66,35 @@ const ProductList = ({ navigation, route }) => {
   const applyFilter = (categoryId) => {
     setSelectedCategory(categoryId);
     setShowFilter(false);
-    if (categoryId === null) {
-      setFilteredProducts(products);
-    } else {
-      const filtered = products.filter(p => p.category_id === categoryId.toString());
-      setFilteredProducts(filtered);
+
+    const lowercasedQuery = searchQuery.toLowerCase();
+    let filtered = products;
+
+    if (categoryId !== null) {
+      filtered = filtered.filter(p => p.category_id === categoryId.toString());
     }
+
+    if (searchQuery.trim() !== '') {
+      filtered = filtered.filter(p =>
+        p.productName.toLowerCase().includes(lowercasedQuery)
+      );
+    }
+
+    setFilteredProducts(filtered);
   };
 
   const renderProduct = ({ item }) => (
-  <TouchableOpacity onPress={() => navigation.navigate('ProductDetail', { product: item })}>
-    <View style={styles.card}>
-      <Image
-        source={{ uri: `http://192.168.1.13/koncepto-app/assets/${item.image}` }}
-        style={styles.image}
-      />
-      <Text style={styles.name}>{item.productName}</Text>
-      <Text style={styles.price}>₱ {parseFloat(item.price).toLocaleString()}</Text>
-    </View>
-  </TouchableOpacity>
-);
-
+    <TouchableOpacity onPress={() => navigation.navigate('ProductDetail', { product: item, user })}>
+      <View style={styles.card}>
+        <Image
+          source={{ uri: `http://192.168.1.13/koncepto-app/assets/${item.image}` }}
+          style={styles.image}
+        />
+        <Text style={styles.name}>{item.productName}</Text>
+        <Text style={styles.price}>₱ {parseFloat(item.price).toLocaleString()}</Text>
+      </View>
+    </TouchableOpacity>
+  );
 
   return (
     <View style={styles.container}>
@@ -81,9 +103,14 @@ const ProductList = ({ navigation, route }) => {
         <Image source={require('./assets/logo.png')} style={styles.logo} />
       </View>
 
-      {/* Search and Filter */}
+      {/* Search + Filter */}
       <View style={styles.searchRow}>
-        <TextInput style={styles.searchInput} placeholder="Search products..." />
+        <TextInput
+          style={styles.searchInput}
+          placeholder="Search products..."
+          value={searchQuery}
+          onChangeText={handleSearch}
+        />
         <TouchableOpacity onPress={() => setShowFilter(true)}>
           <Ionicons name="funnel-outline" size={28} color="#000" />
         </TouchableOpacity>
@@ -110,7 +137,7 @@ const ProductList = ({ navigation, route }) => {
         </Pressable>
       </Modal>
 
-      {/* Product Grid */}
+      {/* Products */}
       {loading ? (
         <ActivityIndicator size="large" color="#2ba310" style={{ marginTop: 50 }} />
       ) : (
@@ -125,19 +152,43 @@ const ProductList = ({ navigation, route }) => {
 
       {/* Bottom Navigation */}
       <View style={styles.bottomNav}>
-        <TouchableOpacity>
+        <TouchableOpacity
+          onPress={() => setActiveTab('Home')}
+          style={[styles.navButton, activeTab === 'Home' && styles.activeButton]}
+        >
           <Ionicons name="home" size={24} color="#fff" />
           <Text style={styles.navLabel}>Home</Text>
         </TouchableOpacity>
-        <TouchableOpacity onPress={() => navigation.navigate('Message')}>
+
+        <TouchableOpacity
+          onPress={() => {
+            setActiveTab('Message');
+            navigation.navigate('Message', { user });
+          }}
+          style={[styles.navButton, activeTab === 'Message' && styles.activeButton]}
+        >
           <Ionicons name="chatbubble-ellipses" size={24} color="#fff" />
           <Text style={styles.navLabel}>Chat</Text>
         </TouchableOpacity>
-        <TouchableOpacity>
+
+        <TouchableOpacity
+          onPress={() => {
+            setActiveTab('Carts');
+            navigation.navigate('Carts', { user });
+          }}
+          style={[styles.navButton, activeTab === 'Carts' && styles.activeButton]}
+        >
           <Ionicons name="cart" size={24} color="#fff" />
           <Text style={styles.navLabel}>Cart</Text>
         </TouchableOpacity>
-        <TouchableOpacity onPress={() => navigation.navigate('Profile', { user })}>
+
+        <TouchableOpacity
+          onPress={() => {
+            setActiveTab('Profile');
+            navigation.navigate('Profile', { user });
+          }}
+          style={[styles.navButton, activeTab === 'Profile' && styles.activeButton]}
+        >
           <Ionicons name="person" size={24} color="#fff" />
           <Text style={styles.navLabel}>Account</Text>
         </TouchableOpacity>
@@ -221,6 +272,15 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 12,
     textAlign: 'center',
+  },
+  navButton: {
+    alignItems: 'center',
+    padding: 8,
+    borderRadius: 10,
+  },
+  activeButton: {
+    borderColor: '#fff',
+    borderWidth: 2,
   },
   modalOverlay: {
     flex: 1,
