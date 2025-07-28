@@ -56,7 +56,7 @@ export default function AccountCredentials({ navigation, route }) {
 
 
     try {10
-      const response = await fetch('http://192.168.1.13/koncepto-app/api/register.php', {
+      const response = await fetch('http://192.168.250.53/koncepto-app/api/register.php', {
         method: 'POST',
         body: formData,
         // IMPORTANT: DO NOT set 'Content-Type' manually

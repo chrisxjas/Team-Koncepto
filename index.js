@@ -28,10 +28,35 @@ import AccountCredentials from './accountcredentials';
 import Message from './message';
 import Profile from './profile';
 import ProductDetail from './product-detail';
-import Carts from './carts'; // make sure the path is correct
-
+import Carts from './carts';
+import ToPay from './to-pay';
+import ToConfirm from './to-confirm';
+import ToReceive from './to-receive';
+import ToRate from './to-rate';
+import PlaceRequest from './place-request';
+import OrderHistory from './order-history';
+import MyProfile from './myprofile';
+import ChatBot from './chatbot';
+import AccountOptions from './account-options';
+import Receipt from './receipt';
+import CustomOrder from './custom-order';
+import Points from './points';
+import ViewCustomOrder from './view-custom-order';
 
 const Stack = createNativeStackNavigator();
+
+// Define colors in a shared object for consistency
+const colors = {
+  primaryGreen: '#4CAF50',
+  darkerGreen: '#388E3C',
+  lightGreen: '#F0F8F0',
+  accentGreen: '#8BC34A',
+  textPrimary: '#333333',
+  textSecondary: '#666666',
+  white: '#FFFFFF',
+  greyBorder: '#DDDDDD',
+  lightGreyBackground: '#FAFAFA',
+};
 
 function LoginScreen({ navigation }) {
   const [email, setEmail] = useState('');
@@ -64,7 +89,7 @@ function LoginScreen({ navigation }) {
     if (!valid) return;
 
     try {
-      const response = await fetch('http://192.168.1.13/koncepto-app/api/login.php', {
+      const response = await fetch('http://192.168.250.53/koncepto-app/api/login.php', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -116,13 +141,13 @@ function LoginScreen({ navigation }) {
           </View>
 
           <View style={styles.loginSection}>
-            <Text style={styles.welcomeText}>Welcome Back</Text>
+            <Text style={styles.welcomeText}>Welcome Back 👋</Text>
 
             {emailError ? <Text style={styles.errorText}>{emailError}</Text> : null}
             <TextInput
               style={[styles.input, emailError ? styles.inputError : null]}
-              placeholder="👤 Email"
-              placeholderTextColor="#999"
+              placeholder="Email"
+              placeholderTextColor={colors.textSecondary}
               value={email}
               onChangeText={setEmail}
               autoCapitalize="none"
@@ -133,24 +158,24 @@ function LoginScreen({ navigation }) {
             <View style={styles.passwordContainer}>
               <TextInput
                 style={[styles.input, styles.passwordInput, passwordError ? styles.inputError : null]}
-                placeholder="🔒 Password"
-                placeholderTextColor="#999"
+                placeholder="Password"
+                placeholderTextColor={colors.textSecondary}
                 secureTextEntry={secureText}
                 value={password}
                 onChangeText={setPassword}
               />
               <TouchableOpacity onPress={() => setSecureText(!secureText)} style={styles.eyeIcon}>
-                <Ionicons name={secureText ? 'eye-off' : 'eye'} size={20} color="#999" />
+                <Ionicons name={secureText ? 'eye-off' : 'eye'} size={20} color={colors.textSecondary} />
               </TouchableOpacity>
             </View>
 
             <View style={styles.rememberContainer}>
-              <Checkbox value={rememberMe} onValueChange={setRememberMe} color={rememberMe ? '#58B32D' : undefined} />
+              <Checkbox value={rememberMe} onValueChange={setRememberMe} color={rememberMe ? colors.primaryGreen : colors.greyBorder} />
               <Text style={styles.rememberText}>Remember me</Text>
             </View>
 
             <TouchableOpacity style={styles.loginButton} onPress={handleLogin}>
-              <Text style={styles.loginText}>LOGIN</Text>
+              <Text style={styles.buttonText}>LOGIN</Text>
             </TouchableOpacity>
 
             <TouchableOpacity style={styles.createAccountButton} onPress={() => navigation.navigate('PersonalDetails')}>
@@ -175,8 +200,21 @@ function App() {
         <Stack.Screen name="AccountCredentials" component={AccountCredentials} options={{ headerShown: false }} />
         <Stack.Screen name="Message" component={Message} options={{ headerShown: false }} />
         <Stack.Screen name="Profile" component={Profile} options={{ headerShown: false }} />
-        <Stack.Screen name="ProductDetail" component={ProductDetail} />
-        <Stack.Screen name="Carts" component={Carts} />
+        <Stack.Screen name="ProductDetail" component={ProductDetail} options={{ headerShown: false }} />
+        <Stack.Screen name="Carts" component={Carts} options={{ headerShown: false }} />
+        <Stack.Screen name="ToPay" component={ToPay} options={{ headerShown: false }} />
+        <Stack.Screen name="ToConfirm" component={ToConfirm} options={{ headerShown: false }} />
+        <Stack.Screen name="ToReceive" component={ToReceive} options={{ headerShown: false }} />
+        <Stack.Screen name="ToRate" component={ToRate} options={{ headerShown: false }} />
+        <Stack.Screen name="PlaceRequest" component={PlaceRequest} options={{ headerShown: false }} />
+        <Stack.Screen name="OrderHistory" component={OrderHistory} options={{ headerShown: false }} />
+        <Stack.Screen name="MyProfile" component={MyProfile} options={{ headerShown: false }} />
+        <Stack.Screen name="ChatBot" component={ChatBot} options={{ headerShown: false }} />
+        <Stack.Screen name="AccountOptions" component={AccountOptions} options={{ headerShown: false }} />
+        <Stack.Screen name="Receipt" component={Receipt} options={{ headerShown: false }} />
+        <Stack.Screen name="CustomOrder" component={CustomOrder} options={{ headerShown: false }} />
+        <Stack.Screen name="Points" component={Points} options={{ headerShown: false }} />
+        <Stack.Screen name="ViewCustomOrder" component={ViewCustomOrder} options={{ headerShown: false }} />
       </Stack.Navigator>
     </NavigationContainer>
   );
@@ -190,22 +228,23 @@ const styles = StyleSheet.create({
   innerContainer: { flex: 1 },
   topSection: {
     flex: 1,
-    backgroundColor: '#2ba310',
+    backgroundColor: colors.primaryGreen, // Use primary green
     justifyContent: 'center',
     alignItems: 'center',
   },
   logo: { width: 160, height: 100, resizeMode: 'contain' },
   loginSection: {
     flex: 2,
-    backgroundColor: '#fff',
+    backgroundColor: colors.white, // Use white background
     padding: 30,
     justifyContent: 'center',
   },
   welcomeText: {
-    fontSize: 24,
+    fontSize: 28, // Slightly larger for emphasis
     fontWeight: 'bold',
     marginBottom: 30,
     textAlign: 'center',
+    color: colors.textPrimary, // Use primary text color
   },
   errorText: {
     fontSize: 12,
@@ -214,13 +253,15 @@ const styles = StyleSheet.create({
     marginLeft: 5,
   },
   input: {
-    height: 45,
-    borderBottomWidth: 1,
-    borderBottomColor: '#999',
-    paddingHorizontal: 10,
+    height: 50, // Slightly taller input
+    borderWidth: 1, // Change from borderBottomWidth to full border
+    borderColor: colors.greyBorder, // Use grey border color
+    borderRadius: 8, // Rounded corners for input fields
+    paddingHorizontal: 15, // Increased padding
     marginBottom: 20,
+    color: colors.textPrimary, // Text color for input
   },
-  inputError: { borderBottomColor: 'red' },
+  inputError: { borderColor: 'red' },
   rememberContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -229,38 +270,48 @@ const styles = StyleSheet.create({
   rememberText: {
     marginLeft: 8,
     fontSize: 14,
+    color: colors.textSecondary, // Use secondary text color
   },
   loginButton: {
-    backgroundColor: '#58B32D',
-    paddingVertical: 12,
-    borderRadius: 8,
+    backgroundColor: colors.primaryGreen, // Use primary green
+    paddingVertical: 14, // Increased padding
+    borderRadius: 10, // More rounded corners
     alignItems: 'center',
+    marginBottom: 10, // Added margin for spacing
+    shadowColor: '#000', // Add subtle shadow
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
+    elevation: 3,
   },
-  loginText: {
-    color: '#fff',
+  buttonText: { // Renamed from loginText to a more general buttonText
+    color: colors.white,
     fontWeight: 'bold',
+    fontSize: 16, // Slightly larger font
   },
   createAccountButton: {
     marginTop: 15,
-    paddingVertical: 12,
-    borderRadius: 8,
+    paddingVertical: 14, // Increased padding
+    borderRadius: 10, // More rounded corners
     alignItems: 'center',
-    borderColor: '#58B32D',
+    borderColor: colors.primaryGreen, // Use primary green border
     borderWidth: 1,
+    backgroundColor: colors.white, // White background for outline button
   },
   createAccountText: {
-    color: '#58B32D',
+    color: colors.primaryGreen, // Use primary green text
     fontWeight: 'bold',
+    fontSize: 16, // Slightly larger font
   },
   passwordContainer: {
     position: 'relative',
   },
   passwordInput: {
-    paddingRight: 40,
+    paddingRight: 50, // More space for the eye icon
   },
   eyeIcon: {
     position: 'absolute',
-    right: 10,
-    top: 12,
+    right: 15, // Adjusted position
+    top: 15, // Adjusted position
   },
 });

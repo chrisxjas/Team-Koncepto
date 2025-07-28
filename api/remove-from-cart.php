@@ -6,21 +6,37 @@ header("Access-Control-Allow-Headers: Content-Type");
 
 $conn = new mysqli("localhost", "root", "", "koncepto1");
 
-$data = json_decode(file_get_contents("php://input"), true);
-
-$user_id = $data["user_id"] ?? null;
-$product_id = $data["product_id"] ?? null;
-
-if (!$user_id || !$product_id) {
-  echo json_encode(["success" => false, "message" => "Missing user_id or product_id"]);
-  exit;
+if ($conn->connect_error) {
+    echo json_encode(["success" => false, "message" => "Database connection failed"]);
+    exit;
 }
 
-// Delete from cart_items
-$conn->query("DELETE FROM cart_items WHERE user_id = '$user_id' AND product_id = '$product_id'");
+$data = json_decode(file_get_contents("php://input"), true);
+$cart_item_id = $data["cart_item_id"] ?? null;
 
-// Optionally: delete from main cart if empty
-$conn->query("DELETE FROM cart WHERE user_id = '$user_id' AND id NOT IN (SELECT cart_id FROM cart_items)");
+if (!$cart_item_id) {
+    echo json_encode(["success" => false, "message" => "Missing cart_item_id"]);
+    exit;
+}
+
+// Secure the ID
+$cart_item_id = intval($cart_item_id);
+
+// Get the cart_id of the item to be deleted
+$get_cart = $conn->query("SELECT cart_id FROM cart_items WHERE id = $cart_item_id");
+if ($get_cart->num_rows === 0) {
+    echo json_encode(["success" => false, "message" => "Cart item not found"]);
+    exit;
+}
+$cart_id = $get_cart->fetch_assoc()['cart_id'];
+
+// Delete the item
+$conn->query("DELETE FROM cart_items WHERE id = $cart_item_id");
+
+// Optionally delete the cart if it has no more items
+$conn->query("DELETE FROM carts WHERE id = $cart_id AND NOT EXISTS (
+    SELECT 1 FROM cart_items WHERE cart_id = $cart_id
+)");
 
 echo json_encode(["success" => true, "message" => "Item removed from cart"]);
-?>
+$conn->close();

@@ -32,9 +32,15 @@ if ($result && $result->num_rows > 0) {
         $schools[] = $row;
     }
 
-    echo json_encode($schools);
+    echo json_encode([
+        "success" => true,
+        "schools" => $schools
+    ]);
 } else {
-    echo json_encode([]);
+    echo json_encode([
+        "success" => true,
+        "schools" => []
+    ]);
 }
 
 // 5. CLOSE CONNECTION

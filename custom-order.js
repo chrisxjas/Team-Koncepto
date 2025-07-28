@@ -43,7 +43,7 @@ const colors = {
 // Define the API base URL here, outside the component to prevent re-creation
 const API_BASE_URL = 'http://192.168.250.53/koncepto-app/';
 
-export default function Profile({ route }) {
+export default function CustomOrder({ route }) {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
 
@@ -54,7 +54,6 @@ export default function Profile({ route }) {
   const [uploading, setUploading] = useState(false);
   const [settingsVisible, setSettingsVisible] = useState(false);
 
-  // Animated value for the settings sidebar (translateX animation)
   const [slideAnim] = useState(new Animated.Value(screenWidth));
 
   const [selectedItems, setSelectedItems] = useState({});
@@ -67,14 +66,14 @@ export default function Profile({ route }) {
 
   const flatListRef = useRef(null);
   const scrollIndex = useRef(0);
-  const autoScrollInterval = useRef(null); // Correct initialization
+  const autoScrollInterval = useRef(null);
   const userInteracted = useRef(false);
 
   // States for account editing modals (email/password)
   const [editAccountModalVisible, setEditAccountModalVisible] = useState(false);
   const [newEmail, setNewEmail] = useState('');
   const [newPassword, setNewPassword] = useState('');
-  const [confirmNewPassword, setConfirmNewPassword] = '';
+  const [confirmNewPassword, setConfirmNewPassword] = useState('');
   const [passwordVerificationModalVisible, setPasswordVerificationModalVisible] = useState(false);
   const [currentPasswordInput, setCurrentPasswordInput] = useState('');
   const [confirmChangesModalVisible, setConfirmChangesModalVisible] = useState(false);
@@ -183,28 +182,8 @@ export default function Profile({ route }) {
     return unsubscribeFocus; // Clean up the listener
   }, [fetchUserData, fetchFrequentlyPurchasedItems, fetchStarterPackItems, checkCustomOrders, navigation]);
 
-  const recommendationSections = [
-    {
-      key: 'frequentlyPurchased',
-      title: 'Frequently Purchased Items',
-      description: 'Based on your purchase habits, you might need these:',
-      items: frequentlyPurchasedItems || [], // Safeguard: ensure items is always an array
-      emptyMessage: 'No frequently purchased recommendations yet.',
-    },
-    {
-      key: 'starterPack',
-      title: 'Starter Pack Recommendations',
-      description: 'Get started with these essential items:',
-      items: starterPackItems || [], // Safeguard: ensure items is always an array
-      emptyMessage: 'No starter pack recommendations available.',
-    },
-  ];
-
   useEffect(() => {
     const startAutoScroll = () => {
-      if (autoScrollInterval.current) { // Clear existing interval if any
-        clearInterval(autoScrollInterval.current);
-      }
       autoScrollInterval.current = setInterval(() => {
         if (flatListRef.current && !userInteracted.current && recommendationSections.length > 1) {
           scrollIndex.current = (scrollIndex.current + 1) % recommendationSections.length;
@@ -220,29 +199,23 @@ export default function Profile({ route }) {
       }
     };
 
-    // Initial stop and start
     stopAutoScroll();
-    if (recommendationSections.length > 1) { // Only start if there's more than one section to scroll
-        startAutoScroll();
-    }
+    startAutoScroll();
 
-
-    return () => stopAutoScroll(); // Cleanup on unmount
-  }, [frequentlyPurchasedItems, starterPackItems, recommendationSections.length]); // Depend on relevant data changes
+    return () => stopAutoScroll();
+  }, [frequentlyPurchasedItems, starterPackItems]);
 
   const handleScrollBeginDrag = () => {
     userInteracted.current = true;
     if (autoScrollInterval.current) {
       clearInterval(autoScrollInterval.current);
-      autoScrollInterval.current = null;
     }
   };
 
   const handleScrollEndDrag = () => {
     setTimeout(() => {
       userInteracted.current = false;
-      // Only restart auto-scroll if it's not already running and there's more than one section
-      if (!autoScrollInterval.current && recommendationSections.length > 1) {
+      if (!autoScrollInterval.current) {
         autoScrollInterval.current = setInterval(() => {
           if (flatListRef.current && !userInteracted.current && recommendationSections.length > 1) {
             scrollIndex.current = (scrollIndex.current + 1) % recommendationSections.length;
@@ -256,21 +229,18 @@ export default function Profile({ route }) {
   const openSettings = () => {
     setSettingsVisible(true);
     Animated.timing(slideAnim, {
-      toValue: 0, // Animate to 0 (fully visible)
+      toValue: 0,
       duration: 300,
       useNativeDriver: true,
     }).start();
   };
 
   const closeSettings = () => {
-    // Set visibility to false immediately for smoother transition
-    // The animation will slide out, then modal will unmount
-    setSettingsVisible(false);
     Animated.timing(slideAnim, {
-      toValue: screenWidth, // Animate back to screenWidth (off-screen)
+      toValue: screenWidth,
       duration: 300,
       useNativeDriver: true,
-    }).start();
+    }).start(() => setSettingsVisible(false));
   };
 
   const pickImage = async () => {
@@ -421,6 +391,23 @@ export default function Profile({ route }) {
     );
   };
 
+  const recommendationSections = [
+    {
+      key: 'frequentlyPurchased',
+      title: 'Frequently Purchased Items',
+      description: 'Based on your purchase habits, you might need these:',
+      items: frequentlyPurchasedItems,
+      emptyMessage: 'No frequently purchased recommendations yet.',
+    },
+    {
+      key: 'starterPack',
+      title: 'Starter Pack Recommendations',
+      description: 'Get started with these essential items:',
+      items: starterPackItems,
+      emptyMessage: 'No starter pack recommendations available.',
+    },
+  ];
+
   const scrollRecommendation = (direction) => {
     userInteracted.current = true;
     if (autoScrollInterval.current) {
@@ -440,7 +427,7 @@ export default function Profile({ route }) {
 
     setTimeout(() => {
       userInteracted.current = false;
-      if (!autoScrollInterval.current && recommendationSections.length > 1) { // Only restart if more than one section
+      if (!autoScrollInterval.current) {
         autoScrollInterval.current = setInterval(() => {
           if (flatListRef.current && !userInteracted.current && recommendationSections.length > 1) {
             scrollIndex.current = (scrollIndex.current + 1) % recommendationSections.length;
@@ -470,7 +457,7 @@ export default function Profile({ route }) {
           </View>
 
           {loadingRecommendations ? (
-            // Adjusted margin for ActivityIndicator
+            // FIX: Moved comment to a separate line to resolve SyntaxError
             <ActivityIndicator size="small" color={colors.primaryGreen} style={{ marginTop: 5 }} />
           ) : section.items.length === 0 ? (
             <Text style={{ marginTop: 2, fontStyle: 'italic', color: colors.textSecondary, fontSize: 9 }}>
@@ -721,8 +708,6 @@ export default function Profile({ route }) {
           </View>
         </View>
 
-        
-
         {/* "View Order Request" Button below header - conditionally rendered */}
         {hasCustomOrders && (
           <TouchableOpacity
@@ -815,12 +800,7 @@ export default function Profile({ route }) {
                 <Text style={styles.purchaseItemText}>To Rate</Text>
               </TouchableOpacity>
             </View>
-            <TouchableOpacity style={styles.customOrderItem} onPress={() => navigation.navigate('ViewCustomOrder', { user })}>
-              <Ionicons name="eye-outline" size={18} color={colors.darkerGreen} />
-              <Text style={styles.customOrderText}>View Custom Orders</Text>
-            </TouchableOpacity>
           </View>
-          
 
           <View style={styles.section}>
             <Text style={styles.sectionHeading}>Support</Text>
@@ -876,7 +856,6 @@ export default function Profile({ route }) {
             activeOpacity={1}
             onPress={closeSettings}
           >
-            {/* Using slideAnim directly for translateX as it's a single Animated.Value */}
             <Animated.View style={[styles.settingsModal, { transform: [{ translateX: slideAnim }] }]}>
               <SafeAreaView style={{ flex: 1, backgroundColor: colors.white }}>
                 <View style={styles.settingsHeader}>
@@ -886,7 +865,7 @@ export default function Profile({ route }) {
                   </TouchableOpacity>
                 </View>
                 <ScrollView contentContainerStyle={styles.settingsContent}>
-                  <TouchableOpacity style={styles.settingsOption} onPress={() => navigation.navigate('MyProfile', { user })}>
+                  <TouchableOpacity style={styles.settingsOption} onPress={() => navigation.navigate('Profile', { user })}>
                     <Ionicons name="person-outline" size={20} color={colors.textPrimary} style={styles.settingsOptionIcon} />
                     <Text style={styles.settingsOptionText}>Profile</Text>
                   </TouchableOpacity>
@@ -1181,19 +1160,6 @@ const styles = StyleSheet.create({
     shadowRadius: 3,
     elevation: 3,
   },
-    customOrderItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 8,
-    borderTopWidth: 1,
-    borderTopColor: colors.greyBorder,
-  },
-
-  customOrderText: {
-    marginLeft: 10,
-    fontSize: 13,
-    color: colors.textPrimary,
-  },
   viewOrderRequestButtonText: {
     color: colors.white,
     fontSize: 14, // Made smaller
@@ -1340,7 +1306,6 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
     marginTop: 5,
     textAlign: 'center',
-    marginBottom: 10
   },
   supportItem: {
     flexDirection: 'row',

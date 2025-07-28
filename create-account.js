@@ -20,7 +20,7 @@ export default function CreateAccount({ navigation }) {
   useEffect(() => {
     const fetchSchools = async () => {
       try {
-        const response = await fetch('http://192.168.1.13/koncepto-app/api/get-schools.php');
+        const response = await fetch('http://192.168.250.53/koncepto-app/api/get-schools.php');
         const data = await response.json();
         setSchools(data);
       } catch (error) {
