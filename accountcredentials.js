@@ -5,6 +5,7 @@ import {
   Keyboard, TouchableWithoutFeedback, Alert
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
+import { BASE_URL } from './config';
 
 export default function AccountCredentials({ navigation, route }) {
   const { first_Name, last_Name, cp_No, schoolId, credentialsFile = 'user' } = route.params;
@@ -55,14 +56,14 @@ export default function AccountCredentials({ navigation, route }) {
 });
 
 
-    try {10
-      const response = await fetch('http://192.168.250.53/koncepto-app/api/register.php', {
+    try {
+      const response = await fetch(`${BASE_URL}/register.php`, {
         method: 'POST',
         body: formData,
-        // IMPORTANT: DO NOT set 'Content-Type' manually
       });
 
       const result = await response.json();
+
       if (result.success) {
         Alert.alert('Success', 'Account created.', [
           { text: 'OK', onPress: () => navigation.navigate('Login') },
@@ -71,11 +72,10 @@ export default function AccountCredentials({ navigation, route }) {
         Alert.alert('Error', result.message || 'Account creation failed.');
       }
     } catch (error) {
-      console.log('Fetch error:', error);
-      Alert.alert('Error', 'Server error.');
+      console.error('Fetch error:', error);
+      Alert.alert('Error', 'Server error. Please try again later.');
     }
-  };
-
+  }
   return (
     <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <TouchableWithoutFeedback onPress={Keyboard.dismiss}>

@@ -5,6 +5,8 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
+import { BASE_URL } from './config';
+import { ASSETS_URL } from './config';
 
 // Define colors in a shared object for consistency
 const colors = {
@@ -20,13 +22,11 @@ const colors = {
   errorRed: '#e53935', // For prices and errors, or special alerts
 };
 
-const API = 'http://192.168.250.53/koncepto-app/api';
-
 const CustomCheckBox = ({ value, onValueChange }) => (
   <TouchableOpacity onPress={onValueChange} style={styles.checkboxContainer}>
     <Ionicons
       name={value ? 'checkbox-outline' : 'square-outline'}
-      size={20} // Reduced checkbox size
+      size={20}
       color={value ? colors.primaryGreen : colors.textSecondary}
     />
   </TouchableOpacity>
@@ -37,7 +37,7 @@ const CustomCheckBox = ({ value, onValueChange }) => (
 const Carts = ({ route }) => {
   const navigation = useNavigation();
   const { user } = route.params;
-  const [cartItems, setCartItems] = useState([]); // Raw cart items from API
+  const [cartItems, setCartItems] = useState([]); // Raw cart items from BASE_URL
   const [selectedItems, setSelectedItems] = useState({});
   const [selectAll, setSelectAll] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -48,7 +48,7 @@ const Carts = ({ route }) => {
   const fetchCartItems = async () => {
     try {
       setLoading(true);
-      const res = await fetch(`${API}/get-cart-items.php?user_id=${user.id}`);
+      const res = await fetch(`${BASE_URL}/get-cart-items.php?user_id=${user.id}`);
       const data = await res.json();
       if (data.success) {
         setCartItems(data.items);
@@ -135,12 +135,12 @@ const Carts = ({ route }) => {
     const originalCartItems = [...cartItems]; // Store current state for revert
     setCartItems(prevItems =>
       prevItems.map(item =>
-        item.id === itemId ? { ...item, quantity: newQty.toString() } : item // Ensure quantity is string if API expects it
+        item.id === itemId ? { ...item, quantity: newQty.toString() } : item // Ensure quantity is string if BASE_URL expects it
       )
     );
 
     try {
-      const res = await fetch(`${API}/add-to-cart.php`, { // This API is used for both add and update with 'replace'
+      const res = await fetch(`${BASE_URL}/add-to-cart.php`, { // This BASE_URL is used for both add and update with 'replace'
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -185,7 +185,7 @@ const Carts = ({ route }) => {
             });
 
             try {
-              const response = await fetch(`${API}/remove-from-cart.php`, {
+              const response = await fetch(`${BASE_URL}/remove-from-cart.php`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ cart_item_id: cartItemId }),
@@ -252,7 +252,7 @@ const Carts = ({ route }) => {
       <View style={styles.cartItem}>
         <CustomCheckBox value={selectedItems[item.id]} onValueChange={() => toggleSelectItem(item.id)} />
         <Image
-          source={{ uri: `${API.replace('/api', '')}/assets/${item.image}` }}
+          source={{ uri: `${ASSETS_URL}/assets/${item.image}` }}
           style={styles.itemImage}
         />
         <View style={styles.itemDetails}>

@@ -1,63 +1,46 @@
 <?php
-// IMPORTANT: This script should be run ONCE to hash existing plain-text passwords.
-// After running, DELETE this file from your server for security reasons.
+header("Access-Control-Allow-Origin: *");
+header("Access-Control-Allow-Methods: POST");
+header("Access-Control-Allow-Headers: Content-Type");
+header("Content-Type: application/json");
 
-header('Content-Type: text/plain'); // Output as plain text for easier viewing of results
+// include db connection (same folder: api/)
+include __DIR__ . '/db_connection.php';
 
-// Database connection details
-$servername = "localhost";
-$username = "root"; // Your database username
-$password = "";     // Your database password
-$dbname = "koncepto1"; // Your database name
-
-// Create connection
-$conn = new mysqli($servername, $username, $password, $dbname);
-
-// Check connection
-if ($conn->connect_error) {
-    die("Connection failed: " . $conn->connect_error);
-}
-
-echo "Starting password hashing process...\n";
-
-// 1. Fetch all users with their current (plain-text) passwords
-$sql_select = "SELECT id, password FROM users";
-$result = $conn->query($sql_select);
-
-if ($result->num_rows > 0) {
-    $update_count = 0;
-    echo "Found " . $result->num_rows . " users.\n";
-
-    // Prepare update statement outside the loop for efficiency
-    $sql_update = "UPDATE users SET password = ? WHERE id = ?";
-    $stmt = $conn->prepare($sql_update);
-
-    if ($stmt === false) {
-        die("Failed to prepare update statement: " . $conn->error);
+try {
+    // fetch all users
+    $result = $conn->query("SELECT id, password FROM users");
+    if (!$result) {
+        throw new Exception("Database error: " . $conn->error);
     }
 
+    $updated = 0;
     while ($row = $result->fetch_assoc()) {
         $userId = $row['id'];
-        $plainTextPassword = $row['password'];
+        $currentPassword = $row['password'];
 
-        // Hash the plain-text password
-        // PASSWORD_DEFAULT uses the strongest available algorithm (currently bcrypt)
-        $hashedPassword = password_hash($plainTextPassword, PASSWORD_DEFAULT);
+        // skip if already hashed (assuming hashed passwords start with $2y$ for bcrypt)
+        if (strpos($currentPassword, '$2y$') === 0) continue;
 
-        // Update the database with the hashed password
-        $stmt->bind_param("si", $hashedPassword, $userId); // "s" for string (hashed password), "i" for integer (user ID)
+        $hashedPassword = password_hash($currentPassword, PASSWORD_DEFAULT);
 
-        if ($stmt->execute()) {
-            echo "User ID " . $userId . ": Password hashed and updated successfully.\n";
-            $update_count++;
-        } else {
-            echo "User ID " . $userId . ": Error updating password: " . $stmt->error . "\n";
-        }
+        $stmt = $conn->prepare("UPDATE users SET password = ? WHERE id = ?");
+        $stmt->bind_param("si", $hashedPassword, $userId);
+        if ($stmt->execute()) $updated++;
+        $stmt->close();
     }
-    $stmt->close();
-    echo "\nPassword hashing process completed. Total updated: " . $update_count . " users.\n";
-} else {
-    echo "No users found in the database to hash passwords for.\n";
+
+    echo json_encode([
+        "success" => true,
+        "message" => "Password hashing completed",
+        "users_updated" => $updated
+    ]);
+
+} catch (Exception $e) {
+    echo json_encode([
+        "success" => false,
+        "message" => $e->getMessage()
+    ]);
 }
 
 $conn->close();

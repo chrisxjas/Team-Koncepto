@@ -4,12 +4,8 @@ header("Access-Control-Allow-Methods: POST");
 header("Access-Control-Allow-Headers: Content-Type");
 header("Content-Type: application/json");
 
-$conn = new mysqli("localhost", "root", "", "koncepto1");
-
-if ($conn->connect_error) {
-    echo json_encode(["success" => false, "message" => "Database connection failed"]);
-    exit;
-}
+// include db connection (same folder: api/)
+include __DIR__ . '/db_connection.php';
 
 $data = json_decode(file_get_contents("php://input"), true);
 
@@ -23,6 +19,7 @@ if (!$user_id || !$product_id) {
     exit;
 }
 
+// check if cart exists
 $cartRes = $conn->query("SELECT id FROM carts WHERE user_id = $user_id");
 if ($cartRes->num_rows > 0) {
     $cart = $cartRes->fetch_assoc();
@@ -32,6 +29,7 @@ if ($cartRes->num_rows > 0) {
     $cart_id = $conn->insert_id;
 }
 
+// check if product exists in cart
 $checkItem = $conn->query("SELECT id, quantity FROM cart_items WHERE cart_id = $cart_id AND product_id = $product_id");
 
 if ($checkItem->num_rows > 0) {

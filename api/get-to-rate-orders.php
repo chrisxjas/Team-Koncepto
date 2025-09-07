@@ -2,13 +2,7 @@
 header('Content-Type: application/json');
 header("Access-Control-Allow-Origin: *");
 
-$conn = new mysqli("localhost", "root", "", "koncepto1");
-
-// Check connection
-if ($conn->connect_error) {
-    echo json_encode(["success" => false, "message" => "Connection failed"]);
-    exit();
-}
+include __DIR__ . '/db_connection.php'; // Separate DB connection file
 
 $user_id = isset($_GET['user_id']) ? intval($_GET['user_id']) : 0;
 
@@ -17,53 +11,65 @@ if ($user_id === 0) {
     exit();
 }
 
-$order_sql = "SELECT id AS order_id, Orderdate, status 
-              FROM orders 
-              WHERE user_id = $user_id AND status = 'To Rate' 
-              ORDER BY Orderdate DESC";
+// Fetch orders with items that haven't been rated yet
+$sql = "
+    SELECT 
+        o.id AS order_id,
+        o.Orderdate,
+        o.status,
+        p.id AS product_id,
+        p.productName,
+        p.image,
+        od.quantity,
+        od.price
+    FROM orders o
+    JOIN order_details od ON o.id = od.order_id
+    JOIN products p ON od.product_id = p.id
+    WHERE o.user_id = ?
+      AND o.status = 'To Rate'
+      AND NOT EXISTS (
+          SELECT 1 
+          FROM feedbacks f 
+          WHERE f.order_id = o.id 
+            AND f.product_id = p.id 
+            AND f.user_id = ?
+      )
+    ORDER BY o.Orderdate DESC, od.id ASC
+";
 
-$order_result = $conn->query($order_sql);
+$stmt = $conn->prepare($sql);
+$stmt->bind_param("ii", $user_id, $user_id);
+$stmt->execute();
+$result = $stmt->get_result();
+
 $orders = [];
 
-if ($order_result && $order_result->num_rows > 0) {
-    while ($order = $order_result->fetch_assoc()) {
-        $order_id = $order['order_id'];
+while ($row = $result->fetch_assoc()) {
+    $order_id = $row['order_id'];
 
-        $items_sql = "SELECT 
-                        p.productName, 
-                        od.quantity, 
-                        od.price, 
-                        p.image,
-                        od.product_id
-                      FROM order_detail od
-                      JOIN products p ON od.product_id = p.id
-                      WHERE od.order_id = $order_id
-                      AND od.product_id NOT IN (
-                          SELECT product_id 
-                          FROM feedbacks 
-                          WHERE order_id = $order_id AND user_id = $user_id
-                      )";
-
-        $items_result = $conn->query($items_sql);
-        $items = [];
-
-        if ($items_result && $items_result->num_rows > 0) {
-            while ($item = $items_result->fetch_assoc()) {
-                $items[] = $item;
-            }
-        }
-
-        if (!empty($items)) {
-            $order['items'] = $items;
-            $orders[] = $order;
-        }
+    if (!isset($orders[$order_id])) {
+        $orders[$order_id] = [
+            "order_id" => $order_id,
+            "Orderdate" => $row['Orderdate'],
+            "status" => $row['status'],
+            "items" => []
+        ];
     }
+
+    $orders[$order_id]['items'][] = [
+        "product_id" => $row['product_id'],
+        "productName" => $row['productName'],
+        "image" => $row['image'],
+        "quantity" => $row['quantity'],
+        "price" => number_format($row['price'], 2, '.', '')
+    ];
 }
 
 echo json_encode([
     "success" => true,
-    "orders" => $orders
+    "orders" => array_values($orders)
 ]);
 
+$stmt->close();
 $conn->close();
 ?>

@@ -1,19 +1,11 @@
 <?php
-header('Content-Type: application/json');
+header("Content-Type: application/json");
+header("Access-Control-Allow-Origin: *");
+header("Access-Control-Allow-Methods: POST");
+header("Access-Control-Allow-Headers: Content-Type");
 
-// Database Connection Details
-$servername = "localhost";
-$username = "root"; // Your database username
-$password = "";     // Your database password
-$dbname = "koncepto1"; // <<< MAKE SURE THIS IS YOUR ACTUAL DATABASE NAME
-
-// Create connection
-$conn = new mysqli($servername, $username, $password, $dbname);
-
-// Check connection
-if ($conn->connect_error) {
-    die("Connection failed: " . $conn->connect_error);
-}
+// Include centralized DB connection
+include __DIR__ . '/db_connection.php';
 
 $response = ['success' => false, 'message' => ''];
 
@@ -21,19 +13,21 @@ $response = ['success' => false, 'message' => ''];
 $data = json_decode(file_get_contents("php://input"));
 
 if (isset($data->user_id) && isset($data->reward_id) && isset($data->required_points)) {
-    $userId = $conn->real_escape_string($data->user_id);
-    $rewardId = $conn->real_escape_string($data->reward_id);
+    $userId = intval($data->user_id);
+    $rewardId = intval($data->reward_id);
     $requiredPoints = (int)$data->required_points;
 
-    // Start a transaction for atomicity
+    // Start transaction
     $conn->begin_transaction();
 
     try {
         // 1. Check user's current points balance
-        // This assumes the 'points_balance' column exists in your 'users' table.
-        // Use FOR UPDATE to lock the row and prevent race conditions
-        $sqlCheckBalance = "SELECT points_balance FROM users WHERE id = '$userId' FOR UPDATE";
-        $resultBalance = $conn->query($sqlCheckBalance);
+        $sqlCheckBalance = "SELECT points_balance FROM users WHERE id = ? FOR UPDATE";
+        $stmtBalance = $conn->prepare($sqlCheckBalance);
+        $stmtBalance->bind_param("i", $userId);
+        $stmtBalance->execute();
+        $resultBalance = $stmtBalance->get_result();
+        $stmtBalance->close();
 
         if (!$resultBalance || $resultBalance->num_rows === 0) {
             throw new Exception("User not found.");
@@ -46,12 +40,15 @@ if (isset($data->user_id) && isset($data->reward_id) && isset($data->required_po
         }
 
         // 2. Check reward stock and status
-        // Use FOR UPDATE to lock the row and prevent race conditions
-        $sqlCheckReward = "SELECT reward_name, stock FROM rewards WHERE id = '$rewardId' AND status = 'active' FOR UPDATE";
-        $resultReward = $conn->query($sqlCheckReward);
+        $sqlCheckReward = "SELECT reward_name, stock FROM rewards WHERE id = ? AND status = 'active' FOR UPDATE";
+        $stmtReward = $conn->prepare($sqlCheckReward);
+        $stmtReward->bind_param("i", $rewardId);
+        $stmtReward->execute();
+        $resultReward = $stmtReward->get_result();
+        $stmtReward->close();
 
         if (!$resultReward || $resultReward->num_rows === 0) {
-            throw new Exception("Reward not found or is inactive.");
+            throw new Exception("Reward not found or inactive.");
         }
         $reward = $resultReward->fetch_assoc();
         $rewardName = $reward['reward_name'];
@@ -63,44 +60,46 @@ if (isset($data->user_id) && isset($data->reward_id) && isset($data->required_po
 
         // 3. Deduct points from user
         $newBalance = $currentBalance - $requiredPoints;
-        $sqlUpdateUser = "UPDATE users SET points_balance = $newBalance WHERE id = '$userId'";
-        if (!$conn->query($sqlUpdateUser)) {
-            throw new Exception("Failed to update user points: " . $conn->error);
+        $sqlUpdateUser = "UPDATE users SET points_balance = ? WHERE id = ?";
+        $stmtUpdateUser = $conn->prepare($sqlUpdateUser);
+        $stmtUpdateUser->bind_param("ii", $newBalance, $userId);
+        if (!$stmtUpdateUser->execute()) {
+            throw new Exception("Failed to update user points: " . $stmtUpdateUser->error);
         }
+        $stmtUpdateUser->close();
 
         // 4. Decrease reward stock
         $newStock = $currentStock - 1;
-        $sqlUpdateReward = "UPDATE rewards SET stock = $newStock WHERE id = '$rewardId'";
-        if (!$conn->query($sqlUpdateReward)) {
-            throw new Exception("Failed to update reward stock: " . $conn->error);
+        $sqlUpdateReward = "UPDATE rewards SET stock = ? WHERE id = ?";
+        $stmtUpdateReward = $conn->prepare($sqlUpdateReward);
+        $stmtUpdateReward->bind_param("ii", $newStock, $rewardId);
+        if (!$stmtUpdateReward->execute()) {
+            throw new Exception("Failed to update reward stock: " . $stmtUpdateReward->error);
         }
+        $stmtUpdateReward->close();
 
-        // 5. Record the transaction in your 'points' table
-        // For exchange, we use a negative earned_points, and product_id/order_id will be NULL as it's not a purchase.
+        // 5. Record the points transaction
         $sqlRecordTransaction = "INSERT INTO points (user_id, product_id, order_id, earned_points, created_at, updated_at) VALUES (?, NULL, NULL, ?, NOW(), NOW())";
-        $stmt = $conn->prepare($sqlRecordTransaction);
-        if (!$stmt) {
-             throw new Exception("Failed to prepare statement for points record: " . $conn->error);
+        $stmtPoints = $conn->prepare($sqlRecordTransaction);
+        $pointsChange = -$requiredPoints;
+        $stmtPoints->bind_param("ii", $userId, $pointsChange);
+        if (!$stmtPoints->execute()) {
+            throw new Exception("Failed to record points transaction: " . $stmtPoints->error);
         }
-        $pointsChange = -$requiredPoints; // Negative for points deduction during exchange
-        $stmt->bind_param("ii", $userId, $pointsChange);
-        if (!$stmt->execute()) {
-            throw new Exception("Failed to record points transaction: " . $stmt->error);
-        }
-        $stmt->close();
+        $stmtPoints->close();
 
-        // Commit the transaction if all steps are successful
+        // Commit transaction
         $conn->commit();
         $response['success'] = true;
         $response['message'] = "Reward '" . $rewardName . "' exchanged successfully!";
 
     } catch (Exception $e) {
-        // Rollback on any error
         $conn->rollback();
         $response['message'] = $e->getMessage();
     } finally {
         $conn->close();
     }
+
 } else {
     $response['message'] = "Invalid request data.";
 }

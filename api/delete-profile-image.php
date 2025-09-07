@@ -1,15 +1,18 @@
 <?php
 header("Access-Control-Allow-Origin: *");
 header("Content-Type: application/json");
+header("Access-Control-Allow-Methods: GET");
+header("Access-Control-Allow-Headers: Content-Type");
 
 $uploadDir = "../uploads/";
 
-// Validate request
+// Validate request method
 if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
     echo json_encode(["success" => false, "message" => "Invalid request method"]);
     exit;
 }
 
+// Validate user_id
 if (!isset($_GET['user_id']) || empty($_GET['user_id'])) {
     echo json_encode(["success" => false, "message" => "Missing user ID"]);
     exit;
@@ -17,14 +20,10 @@ if (!isset($_GET['user_id']) || empty($_GET['user_id'])) {
 
 $user_id = intval($_GET['user_id']);
 
-// DB connection
-$conn = new mysqli("localhost", "root", "", "koncepto1");
-if ($conn->connect_error) {
-    echo json_encode(["success" => false, "message" => "Database connection failed"]);
-    exit;
-}
+// Include centralized DB connection
+include __DIR__ . '/db_connection.php';
 
-// Get current profilepic
+// Get current profile picture
 $result = $conn->query("SELECT profilepic FROM users WHERE id = $user_id");
 if ($result && $row = $result->fetch_assoc()) {
     $profilepic = $row['profilepic'];
@@ -46,3 +45,4 @@ if ($result && $row = $result->fetch_assoc()) {
 }
 
 $conn->close();
+?>

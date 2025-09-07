@@ -2,12 +2,7 @@
 header("Access-Control-Allow-Origin: *");
 header("Content-Type: application/json");
 
-$conn = new mysqli("localhost", "root", "", "koncepto1");
-
-if ($conn->connect_error) {
-    echo json_encode(["success" => false, "message" => "DB connection failed"]);
-    exit;
-}
+include __DIR__ . '/db_connection.php'; // include DB connection
 
 $user_id = $_GET['id'] ?? null;
 
@@ -32,7 +27,7 @@ $result = $query->get_result();
 if ($result->num_rows > 0) {
     $user = $result->fetch_assoc();
 
-    // Ensure school_name is always present in the response
+    // Ensure school_name is always present
     $user['school_name'] = $user['school_name'] ?? null;
 
     echo json_encode(["success" => true, "user" => $user]);
@@ -41,3 +36,4 @@ if ($result->num_rows > 0) {
 }
 
 $conn->close();
+?>

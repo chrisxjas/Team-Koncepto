@@ -1,21 +1,20 @@
 <?php
 header('Content-Type: application/json');
 header('Access-Control-Allow-Origin: *');
+header('Access-Control-Allow-Methods: GET');
+header('Access-Control-Allow-Headers: Content-Type');
 
-$conn = new mysqli('localhost', 'root', '', 'koncepto1');
+// Include centralized DB connection
+include __DIR__ . '/db_connection.php';
 
-if ($conn->connect_error) {
-    echo json_encode(['success' => false, 'message' => 'Connection failed']);
-    exit;
-}
-
-$user_id = $_GET['user_id'] ?? null;
-
+// Get and validate user_id
+$user_id = isset($_GET['user_id']) ? intval($_GET['user_id']) : 0;
 if (!$user_id) {
     echo json_encode(['success' => false, 'message' => 'Missing user_id']);
     exit;
 }
 
+// Get user details with school info
 $sql = "
     SELECT 
         users.first_name,
@@ -31,7 +30,6 @@ $sql = "
     LEFT JOIN schools ON users.school_id = schools.id
     WHERE users.id = ?
 ";
-
 $stmt = $conn->prepare($sql);
 $stmt->bind_param('i', $user_id);
 $stmt->execute();
@@ -39,12 +37,15 @@ $result = $stmt->get_result();
 
 if ($result->num_rows === 0) {
     echo json_encode(['success' => false, 'message' => 'User not found']);
+    $stmt->close();
+    $conn->close();
     exit;
 }
 
 $user = $result->fetch_assoc();
+$stmt->close();
 
-// --- GET ORDER COUNTS ---
+// Get order counts for the user
 $orderSql = "
     SELECT 
         COUNT(*) AS total,
@@ -58,8 +59,11 @@ $orderStmt = $conn->prepare($orderSql);
 $orderStmt->bind_param('i', $user_id);
 $orderStmt->execute();
 $orderResult = $orderStmt->get_result()->fetch_assoc();
+$orderStmt->close();
 
 $user['orders'] = $orderResult;
 
 echo json_encode(['success' => true, 'user' => $user]);
+
+$conn->close();
 ?>

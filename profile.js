@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, RefreshControl, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -22,6 +22,8 @@ import * as ImagePicker from 'expo-image-picker';
 import { Ionicons, FontAwesome } from '@expo/vector-icons';
 import { useNavigation, useNavigationState } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { BASE_URL } from './config';
+import { ASSETS_URL } from './config';
 
 const screenWidth = Dimensions.get('window').width;
 
@@ -40,12 +42,15 @@ const colors = {
   gold: '#FFD700', // For the coin icon
 };
 
-// Define the API base URL here, outside the component to prevent re-creation
-const API_BASE_URL = 'http://192.168.250.53/koncepto-app/';
-
 export default function Profile({ route }) {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
+  const [refreshing, setRefreshing] = useState(false);
+
+  const [toPayCount, setToPayCount] = useState(0);
+  const [toConfirmCount, setToConfirmCount] = useState(0);
+  const [toReceiveCount, setToReceiveCount] = useState(0);
+  const [toRateCount, setToRateCount] = useState(0);
 
   const userFromParams = route.params?.user || {};
   const [user, setUser] = useState(userFromParams);
@@ -84,15 +89,15 @@ export default function Profile({ route }) {
   const fetchUserData = useCallback(async () => {
     if (!userFromParams.id) {
       console.warn("User ID not available for fetching profile data.");
-      setLoadingRecommendations(false); // Stop loading if no user ID
+      setLoadingRecommendations(false);
       return;
     }
     try {
-      const response = await fetch(`${API_BASE_URL}api/get-user.php?id=${userFromParams.id}`);
+      const response = await fetch(`${BASE_URL}/get-user.php?id=${userFromParams.id}`);
       const resJson = await response.json();
       if (resJson.success && resJson.user) {
         setUser(resJson.user);
-        setNewEmail(resJson.user.email); // Initialize newEmail with current email
+        setNewEmail(resJson.user.email);
       } else {
         console.log('Failed to fetch user data:', resJson.message || 'Unknown error');
       }
@@ -105,7 +110,7 @@ export default function Profile({ route }) {
   const fetchFrequentlyPurchasedItems = useCallback(async () => {
     if (!user.id) return;
     try {
-      const response = await fetch(`${API_BASE_URL}api/get-frequently-purchased.php?user_id=${user.id}`);
+      const response = await fetch(`${BASE_URL}/get-frequently-purchased.php?user_id=${user.id}`);
       const resJson = await response.json();
       if (resJson.success && resJson.items) {
         setFrequentlyPurchasedItems(resJson.items);
@@ -115,10 +120,16 @@ export default function Profile({ route }) {
     }
   }, [user.id]);
 
+  // Handler for pull-to-refresh action
+    const onRefresh = () => {
+        setRefreshing(true); // Activate refreshing indicator
+        fetchProfile();      // Re-fetch profile
+    };
+
   const fetchStarterPackItems = useCallback(async () => {
     if (!user.id) return;
     try {
-      const response = await fetch(`${API_BASE_URL}api/get-starter-pack.php?user_id=${user.id}`);
+      const response = await fetch(`${BASE_URL}/get-starter-pack.php?user_id=${user.id}`);
       const resJson = await response.json();
       if (resJson.success && resJson.items) {
         setStarterPackItems(resJson.items);
@@ -136,7 +147,7 @@ export default function Profile({ route }) {
       return;
     }
     try {
-      const response = await fetch(`${API_BASE_URL}api/check-custom-orders.php?user_id=${user.id}`);
+      const response = await fetch(`${BASE_URL}/check-custom-orders.php?user_id=${user.id}`);
       const resJson = await response.json();
       console.log('checkCustomOrders response:', resJson); // Debugging: See the full response
       if (resJson.success && typeof resJson.has_orders === 'boolean') {
@@ -151,6 +162,38 @@ export default function Profile({ route }) {
       setHasCustomOrders(false); // Default to false on network error
     }
   }, [user.id]);
+
+
+  useEffect(() => {
+    fetch(`${BASE_URL}/get-to-pay-orders.php?user_id=${user.id}`)
+      .then(res => res.json())
+      .then(data => setToPayCount(data.orders?.length || 0))
+      .catch(err => console.log(err));
+
+    fetch(`${BASE_URL}/get-to-confirm-orders.php?user_id=${user.id}`)
+      .then(res => res.json())
+      .then(data => setToConfirmCount(data.orders?.length || 0))
+      .catch(err => console.log(err));
+
+    fetch(`${BASE_URL}/get-to-receive-orders.php?user_id=${user.id}`)
+      .then(res => res.json())
+      .then(data => setToReceiveCount(data.orders?.length || 0))
+      .catch(err => console.log(err));
+
+    fetch(`${BASE_URL}/get-to-rate-orders.php?user_id=${user.id}`)
+      .then(res => res.json())
+      .then(data => setToRateCount(data.orders?.length || 0))
+      .catch(err => console.log(err));
+  }, [user.id]);
+
+  const renderBadge = (count) => {
+    if (count <= 0) return null;
+    return (
+      <View style={styles.badge}>
+        <Text style={styles.badgeText}>{count}</Text>
+      </View>
+    );
+  };
 
 
   useEffect(() => {
@@ -308,7 +351,7 @@ export default function Profile({ route }) {
       });
       formData.append('id', user.id);
 
-      const response = await fetch(`${API_BASE_URL}api/upload-profile-image.php`, {
+      const response = await fetch(`${BASE_URL}/upload-profile-image.php`, {
         method: 'POST',
         headers: {
           'Content-Type': 'multipart/form-data',
@@ -346,7 +389,7 @@ export default function Profile({ route }) {
         const item = itemsToAdd.find(item => item.id.toString() === itemId);
         if (!item) continue;
 
-        await fetch(`${API_BASE_URL}api/add-to-cart.php`, {
+        await fetch(`${BASE_URL}/add-to-cart.php`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -404,7 +447,7 @@ export default function Profile({ route }) {
           style: 'destructive',
           onPress: async () => {
             try {
-              const response = await fetch(`${API_BASE_URL}api/delete-profile-image.php?user_id=${user.id}`);
+              const response = await fetch(`${BASE_URL}/delete-profile-image.php?user_id=${user.id}`);
               const resJson = await response.json();
               if (resJson.success) {
                 setUser((prev) => ({ ...prev, profilepic: null }));
@@ -501,9 +544,9 @@ export default function Profile({ route }) {
                     color={selectedItems[item.id] ? colors.primaryGreen : undefined}
                   />
                   <Image
-                    source={{ uri: `${API_BASE_URL}assets/${item.image}` }}
+                    source={{ uri: `${ASSETS_URL}/assets/${item.image}` }}
                     style={styles.itemImage}
-                    onError={(e) => console.log('Image Load Error:', e.nativeEvent.error, 'for URI:', `${API_BASE_URL}assets/${item.image}`)}
+                    onError={(e) => console.log('Image Load Error:', e.nativeEvent.error, 'for URI:', `${BASE_URL}assets/${item.image}`)}
                   />
                   <Text style={styles.itemText}>
                     {(item.name ? item.name : '') + ' - ₱' + (item.price ? parseFloat(item.price).toFixed(2) : '0.00')}
@@ -578,7 +621,7 @@ export default function Profile({ route }) {
     }
 
     try {
-      const response = await fetch(`${API_BASE_URL}api/verify_current_password.php`, {
+      const response = await fetch(`${BASE_URL}/verify_current_password.php`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -638,7 +681,7 @@ export default function Profile({ route }) {
     setConfirmChangesModalVisible(false); // Close confirmation modal
 
     try {
-      const response = await fetch(`${API_BASE_URL}api/update_account_options.php`, {
+      const response = await fetch(`${BASE_URL}/update_account_options.php`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -676,8 +719,8 @@ export default function Profile({ route }) {
 
   // Fallback for profile image if user.profilepic is not available or invalid
   const profileImageSource = user?.profilepic && user.profilepic !== 'null'
-    ? { uri: `${API_BASE_URL}api/uploads/${user.profilepic}?t=${Date.now()}` }
-    : require('./assets/user.png'); // Ensure you have a default-profile.png in your assets folder
+    ? { uri: `${BASE_URL}/uploads/${user.profilepic}?t=${Date.now()}` }
+    : require('./assets/user.png');
 
   if (loadingRecommendations && !user?.id) { // Show initial loader if user data is not yet loaded
     return (
@@ -711,9 +754,15 @@ export default function Profile({ route }) {
           {/* Coin Icon and Settings Icon Container */}
           <View style={styles.headerIconsContainer}>
             {/* Coin Icon Button */}
-            <TouchableOpacity style={styles.coinIcon} onPress={() => navigation.navigate('Points', { user })}>
-              <FontAwesome name="money" size={20} color={colors.gold} /> {/* Smaller icon */}
-            </TouchableOpacity>
+              <TouchableOpacity 
+                style={styles.coinIcon} 
+                onPress={() => navigation.navigate('Points', { user })}
+              >
+                <Image 
+                  source={require('./assets/kpoints.png')} // place your PNG logo in assets folder
+                  style={{ width: 24, height: 24, resizeMode: 'contain' }} // adjust size as needed
+                />
+              </TouchableOpacity>
             {/* Settings Icon Button */}
             <TouchableOpacity style={styles.settingsIcon} onPress={openSettings}>
               <Ionicons name="settings-outline" size={20} color="white" /> {/* Smaller icon */}
@@ -790,32 +839,43 @@ export default function Profile({ route }) {
                 style={styles.purchaseItem}
                 onPress={() => navigation.navigate('ToPay', { user })}
               >
-                <FontAwesome name="credit-card" size={20} color={colors.darkerGreen} /> {/* Smaller icon */}
+                <FontAwesome name="credit-card" size={20} color={colors.darkerGreen} />
+                {renderBadge(toPayCount)}
                 <Text style={styles.purchaseItemText}>To Pay</Text>
               </TouchableOpacity>
+
               <TouchableOpacity
                 style={styles.purchaseItem}
                 onPress={() => navigation.navigate('ToConfirm', { user })}
               >
-                <Ionicons name="checkmark-circle-outline" size={20} color={colors.darkerGreen} /> {/* Smaller icon */}
+                <Ionicons name="checkmark-circle-outline" size={20} color={colors.darkerGreen} />
+                {renderBadge(toConfirmCount)}
                 <Text style={styles.purchaseItemText}>To Confirm</Text>
               </TouchableOpacity>
+
               <TouchableOpacity
                 style={styles.purchaseItem}
                 onPress={() => navigation.navigate('ToReceive', { user })}
               >
-                <Ionicons name="cube-outline" size={20} color={colors.darkerGreen} /> {/* Smaller icon */}
+                <Ionicons name="cube-outline" size={20} color={colors.darkerGreen} />
+                {renderBadge(toReceiveCount)}
                 <Text style={styles.purchaseItemText}>To Receive</Text>
               </TouchableOpacity>
+
               <TouchableOpacity
                 style={styles.purchaseItem}
                 onPress={() => navigation.navigate('ToRate', { user })}
               >
-                <Ionicons name="star-outline" size={20} color={colors.darkerGreen} /> {/* Smaller icon */}
+                <Ionicons name="star-outline" size={20} color={colors.darkerGreen} />
+                {renderBadge(toRateCount)}
                 <Text style={styles.purchaseItemText}>To Rate</Text>
               </TouchableOpacity>
             </View>
-            <TouchableOpacity style={styles.customOrderItem} onPress={() => navigation.navigate('ViewCustomOrder', { user })}>
+
+            <TouchableOpacity
+              style={styles.customOrderItem}
+              onPress={() => navigation.navigate('ViewCustomOrder', { user })}
+            >
               <Ionicons name="eye-outline" size={18} color={colors.darkerGreen} />
               <Text style={styles.customOrderText}>View Custom Orders</Text>
             </TouchableOpacity>
@@ -896,7 +956,7 @@ export default function Profile({ route }) {
                     <Text style={styles.settingsOptionText}>Account Settings</Text>
                   </TouchableOpacity>
 
-                  <TouchableOpacity style={styles.settingsOption} onPress={() => navigation.navigate('MyReceipt', { user })}>
+                  <TouchableOpacity style={styles.settingsOption} onPress={() => navigation.navigate('Receipt', { user })}>
                     <Ionicons name="document-text-outline" size={20} color={colors.textPrimary} style={styles.settingsOptionIcon} />
                     <Text style={styles.settingsOptionText}>Receipt</Text>
                   </TouchableOpacity>
@@ -1585,5 +1645,47 @@ const styles = StyleSheet.create({
   activeNavLabel: {
     color: colors.white,
     fontWeight: 'bold',
+  },
+  purchaseRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginVertical: 10,
+  },
+  purchaseItem: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+  },
+  purchaseItemText: {
+    marginTop: 4,
+    fontSize: 12,
+    color: colors.darkerGreen,
+  },
+  badge: {
+    position: 'absolute',
+    top: -6,
+    right: -6,
+    backgroundColor: 'red',
+    borderRadius: 8,
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+    minWidth: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  badgeText: {
+    color: 'white',
+    fontSize: 10,
+    fontWeight: 'bold',
+  },
+  customOrderItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 10,
+  },
+  customOrderText: {
+    marginLeft: 6,
+    color: colors.darkerGreen,
+    fontSize: 14,
   },
 });

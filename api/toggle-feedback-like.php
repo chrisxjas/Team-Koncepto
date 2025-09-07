@@ -4,37 +4,33 @@ header("Access-Control-Allow-Origin: *");
 header("Access-Control-Allow-Methods: POST");
 header("Access-Control-Allow-Headers: Content-Type");
 
-$conn = new mysqli("localhost", "root", "", "koncepto1");
+// Include DB connection
+include __DIR__ . '/db_connection.php';
 
 $data = json_decode(file_get_contents("php://input"), true);
+$feedback_id = isset($data["feedback_id"]) ? intval($data["feedback_id"]) : 0;
+$action = $data["action"] ?? '';
 
-$feedback_id = $data["feedback_id"] ?? null;
-$action = $data["action"] ?? null;
-
-if (!$feedback_id || !$action) {
-    echo json_encode(["success" => false, "message" => "Missing feedback_id or action."]);
-    exit;
+if (!$feedback_id || !in_array($action, ['like', 'unlike'])) {
+    echo json_encode(["success" => false, "message" => "Missing or invalid feedback_id or action."]);
+    exit();
 }
 
-// SAFELY ESCAPE `like`
-$sql = "";
-
-if ($action === 'like') {
-    $sql = "UPDATE feedbacks SET `like` = `like` + 1 WHERE id = ?";
-} elseif ($action === 'unlike') {
-    $sql = "UPDATE feedbacks SET `like` = GREATEST(`like` - 1, 0) WHERE id = ?";
-} else {
-    echo json_encode(["success" => false, "message" => "Invalid action."]);
-    exit;
-}
+// Use backticks for reserved keywords (`like`) and prepared statements
+$sql = ($action === 'like') 
+    ? "UPDATE feedbacks SET `like` = `like` + 1 WHERE id = ?" 
+    : "UPDATE feedbacks SET `like` = GREATEST(`like` - 1, 0) WHERE id = ?";
 
 $stmt = $conn->prepare($sql);
 $stmt->bind_param("i", $feedback_id);
 $stmt->execute();
 
 if ($stmt->affected_rows > 0) {
-    echo json_encode(["success" => true]);
+    echo json_encode(["success" => true, "message" => "Action applied successfully."]);
 } else {
     echo json_encode(["success" => false, "message" => "No changes made."]);
 }
+
+$stmt->close();
+$conn->close();
 ?>

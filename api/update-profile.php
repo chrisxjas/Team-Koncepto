@@ -2,14 +2,15 @@
 header('Content-Type: application/json');
 header('Access-Control-Allow-Origin: *');
 
-$conn = new mysqli('localhost', 'root', '', 'koncepto1');
+// Include DB connection
+include __DIR__ . '/db_connection.php';
 
 $data = json_decode(file_get_contents('php://input'), true);
-$user_id = $data['user_id'];
-$first_name = $data['first_name'];
-$last_name = $data['last_name'];
-$cp_no = $data['cp_no'];
-$school_id = $data['school_id'];
+$user_id = isset($data['user_id']) ? intval($data['user_id']) : 0;
+$first_name = $data['first_name'] ?? '';
+$last_name = $data['last_name'] ?? '';
+$cp_no = $data['cp_no'] ?? '';
+$school_id = isset($data['school_id']) ? intval($data['school_id']) : 0;
 
 if (!$user_id) {
     echo json_encode(['success' => false, 'message' => 'Missing user_id']);
@@ -21,7 +22,11 @@ $stmt = $conn->prepare($sql);
 $stmt->bind_param('sssii', $first_name, $last_name, $cp_no, $school_id, $user_id);
 
 if ($stmt->execute()) {
-    echo json_encode(['success' => true]);
+    echo json_encode(['success' => true, 'message' => 'Profile updated successfully']);
 } else {
-    echo json_encode(['success' => false, 'message' => 'Failed to update profile.']);
+    echo json_encode(['success' => false, 'message' => 'Failed to update profile: ' . $stmt->error]);
 }
+
+$stmt->close();
+$conn->close();
+?>

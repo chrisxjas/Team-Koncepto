@@ -11,6 +11,7 @@ import {
   Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { BASE_URL } from './config';
 
 // Define colors in a shared object for consistency
 const colors = {
@@ -29,7 +30,6 @@ const colors = {
   gold: '#FFD700',   // For star ratings
 };
 
-const API = 'http://192.168.250.53/koncepto-app/api'; // Ensure this IP is correct
 
 const ToRate = ({ route, navigation }) => {
   const { user } = route.params;
@@ -54,12 +54,11 @@ const ToRate = ({ route, navigation }) => {
 
   const fetchToRateOrders = async () => {
     try {
-      setLoading(true); // Set loading true when fetching data
-      const res = await fetch(`${API}/get-to-rate-orders.php?user_id=${user.id}`);
+      setLoading(true);
+      const res = await fetch(`${BASE_URL}/get-to-rate-orders.php?user_id=${user.id}`);
       const data = await res.json();
       if (data.success) {
         setOrders(data.orders);
-        // Reset feedback/ratings states when fetching new orders
         setFeedbackTexts({});
         setRatings({});
         setSubmitted({});
@@ -75,12 +74,11 @@ const ToRate = ({ route, navigation }) => {
 
   const fetchRatedOrders = async () => {
     try {
-      setLoading(true); // Set loading true when fetching data
-      const res = await fetch(`${API}/get-rated-orders.php?user_id=${user.id}`);
+      setLoading(true);
+      const res = await fetch(`${BASE_URL}/get-rated-orders.php?user_id=${user.id}`);
       const data = await res.json();
       if (data.success) {
         setOrders(data.orders);
-        // For rated orders, we primarily display existing feedback
         setFeedbackTexts({});
         setRatings({});
         setSubmitted({});
@@ -158,7 +156,7 @@ const ToRate = ({ route, navigation }) => {
     }
 
     try {
-      const response = await fetch(`${API}/send-feedback.php`, {
+      const response = await fetch(`${BASE_URL}/send-feedback.php`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -247,7 +245,7 @@ const ToRate = ({ route, navigation }) => {
             return (
               <View key={index} style={styles.itemRow}>
                 <Image
-                  source={{ uri: `${API.replace('/api', '')}/assets/${subItem.image}` }}
+                  source={{ uri: `${BASE_URL.replace('/api', '')}/assets/${subItem.image}` }}
                   style={styles.image}
                 />
                 <View style={styles.itemDetails}>

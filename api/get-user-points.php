@@ -1,70 +1,59 @@
 <?php
 header('Content-Type: application/json');
+header('Access-Control-Allow-Origin: *');
+header('Access-Control-Allow-Methods: GET');
+header('Access-Control-Allow-Headers: Content-Type');
 
-$servername = "localhost";
-$username = "root"; // Your database username
-$password = "";     // Your database password
-$dbname = "koncepto1"; // <<< MAKE SURE THIS IS YOUR ACTUAL DATABASE NAME
+include __DIR__ . '/db_connection.php'; // include the separate DB connection
 
-$conn = new mysqli($servername, $username, $password, $dbname);
-
-if ($conn->connect_error) {
-    die("Connection failed: " . $conn->connect_error);
+if (!isset($_GET['user_id'])) {
+    echo json_encode(['success' => false, 'message' => 'User ID is required']);
+    exit;
 }
 
-$response = ['success' => false, 'message' => '', 'balance' => 0, 'earned_points' => []];
+$user_id = intval($_GET['user_id']);
 
-if (isset($_GET['user_id'])) {
-    $userId = $conn->real_escape_string($_GET['user_id']);
+try {
+    // 1️⃣ Get total points from user_total_points view
+    $stmt = $conn->prepare("SELECT total_points FROM user_total_points WHERE user_id = ?");
+    $stmt->bind_param("i", $user_id);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $total_points = $result->fetch_assoc()['total_points'] ?? 0;
+    $stmt->close();
 
-    $sqlBalance = "SELECT points_balance FROM users WHERE id = '$userId'";
-    $resultBalance = $conn->query($sqlBalance);
+    // 2️⃣ Get earned points per product from order_points_summary view
+    $stmt = $conn->prepare("
+        SELECT order_id, Orderdate AS order_date, productName AS product_name, quantity, total_points
+        FROM order_points_summary
+        WHERE user_id = ?
+        ORDER BY order_date DESC
+    ");
+    $stmt->bind_param("i", $user_id);
+    $stmt->execute();
+    $result = $stmt->get_result();
 
-    if ($resultBalance && $resultBalance->num_rows > 0) {
-        $user = $resultBalance->fetch_assoc();
-        $response['balance'] = (int)$user['points_balance'];
-    } else {
-        $response['message'] = "User not found or no balance recorded.";
-        echo json_encode($response);
-        $conn->close();
-        exit();
+    $earned_points = [];
+    while ($row = $result->fetch_assoc()) {
+        $earned_points[] = [
+            'transaction_id' => $row['order_id'],
+            'product_name' => $row['product_name'],
+            'quantity' => intval($row['quantity']),
+            'points_earned' => floatval($row['total_points']),
+            'order_date' => $row['order_date'],
+        ];
     }
+    $stmt->close();
 
-    $sqlEarnedPoints = "
-        SELECT
-            p.id AS transaction_id,
-            p.earned_points,
-            p.created_at AS order_date,
-            COALESCE(prod.productName, 'Generic Purchase') AS product_name
-        FROM
-            points p
-        LEFT JOIN
-            products prod ON p.product_id = prod.id
-        WHERE
-            p.user_id = '$userId'
-        ORDER BY
-            p.created_at DESC
-    ";
+    echo json_encode([
+        'success' => true,
+        'balance' => floatval($total_points),
+        'earned_points' => $earned_points
+    ]);
 
-    $resultEarnedPoints = $conn->query($sqlEarnedPoints);
-
-    if ($resultEarnedPoints) {
-        $earnedPoints = [];
-        while ($row = $resultEarnedPoints->fetch_assoc()) {
-            if ($row['earned_points'] > 0) { // Only show positive earnings here
-                 $earnedPoints[] = $row;
-            }
-        }
-        $response['earned_points'] = $earnedPoints;
-        $response['success'] = true;
-        $response['message'] = "Points data fetched successfully.";
-    } else {
-        $response['message'] = "Failed to fetch earned points history: " . $conn->error;
-    }
-} else {
-    $response['message'] = "User ID not provided.";
+} catch (Exception $e) {
+    echo json_encode(['success' => false, 'message' => $e->getMessage()]);
 }
 
-echo json_encode($response);
 $conn->close();
 ?>

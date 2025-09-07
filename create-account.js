@@ -7,6 +7,7 @@ import {
 import { Picker } from '@react-native-picker/picker';
 import * as DocumentPicker from 'expo-document-picker';
 import { StatusBar } from 'expo-status-bar';
+import { BASE_URL } from './config'
 
 export default function CreateAccount({ navigation }) {
   const [first_Name, setFirst_Name] = useState('');
@@ -20,9 +21,9 @@ export default function CreateAccount({ navigation }) {
   useEffect(() => {
     const fetchSchools = async () => {
       try {
-        const response = await fetch('http://192.168.250.53/koncepto-app/api/get-schools.php');
+        const response = await fetch(`${BASE_URL}/get-schools.php`);
         const data = await response.json();
-        setSchools(data);
+        setSchools(data.schools || []);
       } catch (error) {
         console.error('Failed to fetch schools:', error);
       }

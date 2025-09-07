@@ -14,37 +14,35 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-
-const API_BASE_URL = 'http://192.168.250.53/koncepto-app/'; // Ensure this matches your API base URL
+import { BASE_URL } from './config'
 
 const screenWidth = Dimensions.get('window').width;
 
-// Define a consistent color palette
 const colors = {
-  primaryGreen: '#4CAF50', // A vibrant green
-  darkerGreen: '#388E3C', // A slightly darker green for active states/accents
-  lightGreen: '#F0F8F0', // Very light green for backgrounds
-  accentGreen: '#8BC34A', // Another shade of green
-  textPrimary: '#333333', // Dark text for readability
-  textSecondary: '#666666', // Lighter text for secondary info
+  primaryGreen: '#4CAF50',
+  darkerGreen: '#388E3C',
+  lightGreen: '#F0F8F0',
+  accentGreen: '#8BC34A',
+  textPrimary: '#333333',
+  textSecondary: '#666666',
   white: '#FFFFFF',
-  greyBorder: '#DDDDDD', // Light grey for borders and lines
-  lightGreyBackground: '#FAFAFA', // General light background
-  errorRed: '#e53935', // For prices and errors
-  gold: '#FFD700', // For the coin icon
+  greyBorder: '#DDDDDD',
+  lightGreyBackground: '#FAFAFA',
+  errorRed: '#e53935',
+  gold: '#FFD700',
 };
 
 export default function Points() {
   const navigation = useNavigation();
   const route = useRoute();
   const insets = useSafeAreaInsets();
-  const { user } = route.params; // Get user object from navigation params
+  const { user } = route.params;
 
   const [balance, setBalance] = useState(0);
   const [earnedPointsHistory, setEarnedPointsHistory] = useState([]);
   const [rewards, setRewards] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState('earned'); // 'earned' or 'rewards'
+  const [activeTab, setActiveTab] = useState('earned');
 
   const fetchPointsData = useCallback(async () => {
     if (!user || !user.id) {
@@ -55,7 +53,7 @@ export default function Points() {
 
     setLoading(true);
     try {
-      const response = await fetch(`${API_BASE_URL}api/get-user-points.php?user_id=${user.id}`);
+      const response = await fetch(`${BASE_URL}/get-user-points.php?user_id=${user.id}`);
       const resJson = await response.json();
 
       if (resJson.success) {
@@ -75,7 +73,7 @@ export default function Points() {
   const fetchRewards = useCallback(async () => {
     setLoading(true);
     try {
-      const response = await fetch(`${API_BASE_URL}api/get-rewards.php`);
+      const response = await fetch(`${BASE_URL}/get-rewards.php`);
       const resJson = await response.json();
 
       if (resJson.success) {
@@ -93,12 +91,11 @@ export default function Points() {
 
   useEffect(() => {
     fetchPointsData();
-    fetchRewards(); // Fetch rewards on initial load
+    fetchRewards();
     const unsubscribeFocus = navigation.addListener('focus', () => {
-      fetchPointsData(); // Refresh data when screen is focused
+      fetchPointsData();
       fetchRewards();
     });
-
     return unsubscribeFocus;
   }, [fetchPointsData, fetchRewards, navigation]);
 
@@ -112,10 +109,7 @@ export default function Points() {
       'Confirm Exchange',
       `Are you sure you want to exchange ${requiredPoints} points for this reward?`,
       [
-        {
-          text: 'Cancel',
-          style: 'cancel',
-        },
+        { text: 'Cancel', style: 'cancel' },
         {
           text: 'Exchange',
           onPress: async () => {
@@ -123,9 +117,7 @@ export default function Points() {
             try {
               const response = await fetch(`${API_BASE_URL}api/exchange-reward.php`, {
                 method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                   user_id: user.id,
                   reward_id: rewardId,
@@ -136,8 +128,8 @@ export default function Points() {
 
               if (resJson.success) {
                 Alert.alert('Success', resJson.message || 'Reward exchanged successfully!');
-                fetchPointsData(); // Refresh points balance
-                fetchRewards(); // Refresh rewards list (stock might change)
+                fetchPointsData();
+                fetchRewards();
               } else {
                 Alert.alert('Error', resJson.message || 'Failed to exchange reward.');
               }
@@ -154,22 +146,28 @@ export default function Points() {
   };
 
   const renderEarnedPointItem = ({ item }) => (
-    <View style={styles.listItem}>
-      <View style={styles.listIconContainer}>
-        <Ionicons name="add-circle-outline" size={24} color={colors.primaryGreen} />
-      </View>
-      <View style={styles.listItemContent}>
-        <Text style={styles.listItemTitle}>Points Earned from {item.product_name || 'Purchase'}</Text>
-        <Text style={styles.listItemSubtitle}>{item.order_date}</Text>
-      </View>
-      <Text style={styles.pointsAmount}>+{item.points_earned}</Text>
+  <View style={styles.listItem}>
+    <View style={styles.listIconContainer}>
+      {/* Replace Ionicons + sign with kpoints.png image */}
+      <Image
+        source={require('./assets/kpoints.png')}
+        style={{ width: 24, height: 24, resizeMode: 'contain' }}
+      />
     </View>
-  );
+    <View style={styles.listItemContent}>
+      <Text style={styles.listItemTitle}>{item.product_name}</Text>
+      <Text style={styles.listItemSubtitle}>
+        Quantity: {item.quantity ?? 0} | Date: {item.order_date}
+      </Text>
+    </View>
+    <Text style={styles.pointsAmount}>+{item.points_earned}</Text>
+  </View>
+);
 
   const renderRewardItem = ({ item }) => (
     <View style={styles.rewardItem}>
       <Image
-        source={{ uri: `${API_BASE_URL}assets/${item.image}` }}
+        source={{ uri: `${BASE_URL.replace('/api', '')}/assets/${item.image}` }}
         style={styles.rewardImage}
         onError={(e) => console.log('Reward Image Load Error:', e.nativeEvent.error)}
       />
@@ -208,10 +206,13 @@ export default function Points() {
         <View style={styles.balanceCard}>
           <Text style={styles.balanceLabel}>Your Current Points Balance:</Text>
           <View style={styles.balanceDisplay}>
-            <Ionicons name="medal" size={30} color={colors.gold} style={styles.balanceIcon} />
+            <Image
+              source={require('./assets/kpoints.png')}
+              style={[styles.balanceIcon, { width: 30, height: 30, resizeMode: 'contain', marginRight: 10 }]}
+            />
             <Text style={styles.balanceAmount}>{balance}</Text>
           </View>
-          <Text style={styles.balanceInfo}>Keep shopping to earn more points!</Text>
+          <Text style={styles.balanceInfo}>Keep buying to earn more points!</Text>
         </View>
 
         <View style={styles.tabContainer}>
@@ -238,36 +239,34 @@ export default function Points() {
             <ActivityIndicator size="large" color={colors.primaryGreen} />
             <Text style={styles.loadingText}>Loading data...</Text>
           </View>
+        ) : activeTab === 'earned' ? (
+          earnedPointsHistory.length === 0 ? (
+            <Text style={styles.emptyMessage}>No points earned yet. Start your order now!</Text>
+          ) : (
+            <FlatList
+              data={earnedPointsHistory}
+              renderItem={renderEarnedPointItem}
+              keyExtractor={(item) =>
+                item.transaction_id && item.product_name
+                  ? `${item.transaction_id}-${item.product_name}`
+                  : Math.random().toString()
+              }
+              scrollEnabled={false}
+              ListHeaderComponent={() => <Text style={styles.sectionTitle}>Points History</Text>}
+              ListHeaderComponentStyle={{ marginBottom: 10 }}
+            />
+          )
+        ) : rewards.length === 0 ? (
+          <Text style={styles.emptyMessage}>No rewards available at the moment.</Text>
         ) : (
-          <>
-            {activeTab === 'earned' ? (
-              earnedPointsHistory.length === 0 ? (
-                <Text style={styles.emptyMessage}>No points earned yet. Start shopping!</Text>
-              ) : (
-                <FlatList
-                  data={earnedPointsHistory}
-                  renderItem={renderEarnedPointItem}
-                  keyExtractor={(item, index) => item.transaction_id ? item.transaction_id.toString() : index.toString()}
-                  scrollEnabled={false} // Disable inner scroll as parent ScrollView handles it
-                  ListHeaderComponent={() => <Text style={styles.sectionTitle}>Points History</Text>}
-                  ListHeaderComponentStyle={{ marginBottom: 10 }}
-                />
-              )
-            ) : ( // activeTab === 'rewards'
-              rewards.length === 0 ? (
-                <Text style={styles.emptyMessage}>No rewards available at the moment.</Text>
-              ) : (
-                <FlatList
-                  data={rewards}
-                  renderItem={renderRewardItem}
-                  keyExtractor={(item) => item.id.toString()}
-                  scrollEnabled={false} // Disable inner scroll as parent ScrollView handles it
-                  ListHeaderComponent={() => <Text style={styles.sectionTitle}>Available Rewards</Text>}
-                  ListHeaderComponentStyle={{ marginBottom: 10 }}
-                />
-              )
-            )}
-          </>
+          <FlatList
+            data={rewards}
+            renderItem={renderRewardItem}
+            keyExtractor={(item) => item.id.toString()}
+            scrollEnabled={false}
+            ListHeaderComponent={() => <Text style={styles.sectionTitle}>Available Rewards</Text>}
+            ListHeaderComponentStyle={{ marginBottom: 10 }}
+          />
         )}
       </ScrollView>
 
@@ -276,7 +275,10 @@ export default function Points() {
           <Ionicons name="person-outline" size={20} color={colors.white} />
           <Text style={styles.footerButtonText}>Back to Profile</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.footerButton} onPress={() => navigation.navigate('ProductList', { user })}>
+        <TouchableOpacity
+          style={styles.footerButton}
+          onPress={() => navigation.navigate('ProductList', { user })}
+        >
           <Ionicons name="basket-outline" size={20} color={colors.white} />
           <Text style={styles.footerButtonText}>Buy More</Text>
         </TouchableOpacity>

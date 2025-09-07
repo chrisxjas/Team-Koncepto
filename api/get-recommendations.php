@@ -2,15 +2,9 @@
 header("Content-Type: application/json");
 header("Access-Control-Allow-Origin: *");
 
-$conn = new mysqli("localhost", "root", "", "koncepto1");
-
-if ($conn->connect_error) {
-    echo json_encode(["success" => false, "message" => "Connection failed"]);
-    exit;
-}
+include __DIR__ . '/db_connection.php';
 
 $user_id = $_GET['user_id'] ?? null;
-
 if (!$user_id) {
     echo json_encode(["success" => false, "message" => "Missing user_id"]);
     exit;
@@ -23,7 +17,7 @@ $sql = "
         p.price, 
         COUNT(od.product_id) AS order_count
     FROM orders o
-    INNER JOIN order_detail od ON o.id = od.order_id
+    INNER JOIN order_details od ON o.id = od.order_id
     INNER JOIN products p ON p.id = od.product_id
     WHERE o.user_id = ?
     GROUP BY p.id

@@ -6,6 +6,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { Picker } from '@react-native-picker/picker';
 import { CommonActions } from '@react-navigation/native';
+import { BASE_URL } from './config';
 
 export default function MyProfile({ route, navigation }) {
   const { user } = route.params;
@@ -25,7 +26,7 @@ export default function MyProfile({ route, navigation }) {
   }, []);
 
   const fetchSchools = () => {
-    fetch('http://192.168.250.53/koncepto-app/api/get-schools.php')
+    fetch(`${BASE_URL}/get-schools.php`)
       .then((res) => res.json())
       .then((data) => {
         if (data.success) {
@@ -34,8 +35,9 @@ export default function MyProfile({ route, navigation }) {
       });
   };
 
+
   const fetchProfile = () => {
-    fetch(`http://192.168.250.53/koncepto-app/api/get-profile.php?user_id=${user.id}`)
+    fetch(`${BASE_URL}/get-profile.php?user_id=${user.id}`)
       .then((res) => res.json())
       .then((data) => {
         if (data.success) {
@@ -60,7 +62,7 @@ export default function MyProfile({ route, navigation }) {
   };
 
   const handleSaveProfile = () => {
-    fetch('http://192.168.250.53/koncepto-app/api/update-profile.php', {
+    fetch(`${BASE_URL}/update-profile.php`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -114,7 +116,7 @@ export default function MyProfile({ route, navigation }) {
       <View style={styles.profileContainer}>
         {profile.profilepic ? (
           <Image
-            source={{ uri: `http://192.168.250.53/koncepto-app/api/uploads/${profile.profilepic}` }}
+            source={{ uri: `http://10.214.133.17/koncepto-app/api/uploads/${profile.profilepic}` }}
             style={styles.profilePic}
           />
         ) : (

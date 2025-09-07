@@ -2,78 +2,69 @@
 header('Content-Type: application/json');
 header("Access-Control-Allow-Origin: *");
 
-$conn = new mysqli("localhost", "root", "", "koncepto1");
-
-// Check connection
-if ($conn->connect_error) {
-    echo json_encode(["success" => false, "message" => "Connection failed: " . $conn->connect_error]);
-    exit();
-}
+include __DIR__ . '/db_connection.php';
 
 $user_id = isset($_GET['user_id']) ? intval($_GET['user_id']) : 0;
-
 if ($user_id === 0) {
     echo json_encode(["success" => false, "message" => "Invalid user_id"]);
     exit();
 }
 
-// Get orders with status 'To Pay' for the user including status field
-$order_sql = "SELECT id AS order_id, Orderdate, status 
-              FROM orders 
-              WHERE user_id = $user_id AND status = 'To Pay' 
-              ORDER BY Orderdate DESC";
+// Fetch orders and their items in one query
+$sql = "
+    SELECT 
+        o.id AS order_id,
+        o.Orderdate,
+        o.status,
+        p.id AS product_id,
+        p.productName,
+        od.quantity,
+        od.price,
+        p.image
+    FROM orders o
+    JOIN order_details od ON o.id = od.order_id
+    JOIN products p ON od.product_id = p.id
+    WHERE o.user_id = ? AND o.status = 'To Pay'
+    ORDER BY o.Orderdate DESC, od.id ASC
+";
 
-$order_result = $conn->query($order_sql);
+$stmt = $conn->prepare($sql);
+$stmt->bind_param("i", $user_id);
+$stmt->execute();
+$result = $stmt->get_result();
+
 $orders = [];
 
-if ($order_result && $order_result->num_rows > 0) {
-    while ($order = $order_result->fetch_assoc()) {
-        $order_id = $order['order_id'];
-        $current_order_total_price = 0; // Initialize total for this order
-
-        // Get order items for this order
-        $items_sql = "SELECT 
-                          p.productName, 
-                          od.quantity, 
-                          od.price, 
-                          p.image,
-                          od.product_id
-                      FROM order_detail od
-                      JOIN products p ON od.product_id = p.id
-                      WHERE od.order_id = $order_id";
-
-        $items_result = $conn->query($items_sql);
-        $items = [];
-
-        if ($items_result && $items_result->num_rows > 0) {
-            while ($item = $items_result->fetch_assoc()) {
-                // Ensure price and quantity are numeric for calculation
-                $item_price = floatval($item['price']);
-                $item_quantity = intval($item['quantity']);
-                
-                // Calculate subtotal for each item and add to current order total
-                $item_subtotal = $item_price * $item_quantity;
-                $current_order_total_price += $item_subtotal;
-
-                // Add formatted subtotal to the item for frontend display if needed
-                // (Optional, frontend can also calculate this)
-                $item['subtotal'] = number_format($item_subtotal, 2, '.', ''); 
-                
-                $items[] = $item;
-            }
-        }
-
-        $order['items'] = $items;
-        // Add the calculated total_price for the entire order
-        $order['total_price'] = number_format($current_order_total_price, 2, '.', ''); 
-        $orders[] = $order;
+while ($row = $result->fetch_assoc()) {
+    $order_id = $row['order_id'];
+    if (!isset($orders[$order_id])) {
+        $orders[$order_id] = [
+            "order_id" => $order_id,
+            "Orderdate" => $row['Orderdate'],
+            "status" => $row['status'],
+            "items" => [],
+            "total_price" => 0
+        ];
     }
+
+    $item_subtotal = floatval($row['price']) * intval($row['quantity']);
+    $orders[$order_id]['items'][] = array_merge($row, [
+        "subtotal" => number_format($item_subtotal, 2, '.', '')
+    ]);
+
+    $orders[$order_id]['total_price'] += $item_subtotal;
+}
+
+// Format total_price for each order
+foreach ($orders as &$order) {
+    $order['total_price'] = number_format($order['total_price'], 2, '.', '');
 }
 
 echo json_encode([
     "success" => true,
-    "orders" => $orders
+    "orders" => array_values($orders)
 ]);
 
+$stmt->close();
 $conn->close();
 ?>

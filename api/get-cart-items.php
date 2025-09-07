@@ -1,21 +1,20 @@
 <?php
 header("Access-Control-Allow-Origin: *");
 header("Content-Type: application/json");
+header("Access-Control-Allow-Methods: GET");
+header("Access-Control-Allow-Headers: Content-Type");
 
-$conn = new mysqli("localhost", "root", "", "koncepto1");
+// Include centralized DB connection
+include __DIR__ . '/db_connection.php';
 
-if ($conn->connect_error) {
-    echo json_encode(["success" => false, "message" => "Database connection failed"]);
-    exit;
-}
-
-$user_id = $_GET['user_id'] ?? null;
+$user_id = isset($_GET['user_id']) ? intval($_GET['user_id']) : null;
 
 if (!$user_id) {
     echo json_encode(["success" => false, "message" => "Missing user_id"]);
     exit;
 }
 
+// Get cart ID for the user
 $cartRes = $conn->query("SELECT id FROM carts WHERE user_id = $user_id");
 if ($cartRes->num_rows === 0) {
     echo json_encode(["success" => true, "items" => []]);
@@ -25,11 +24,12 @@ if ($cartRes->num_rows === 0) {
 $cart = $cartRes->fetch_assoc();
 $cart_id = $cart['id'];
 
+// Fetch cart items with product details
 $sql = "
     SELECT 
         ci.id,
         ci.quantity,
-        p.id as product_id,
+        p.id AS product_id,
         p.productName,
         p.price,
         p.image,
@@ -47,15 +47,7 @@ while ($row = $result->fetch_assoc()) {
     $items[] = $row;
 }
 
-// --- START DEBUGGING CODE ---
-// error_log("Raw cart items fetched: " . print_r($items, true)); 
-// You can uncomment the above line to log to your PHP error log file.
-// Or, for direct output (REMOVE IN PRODUCTION):
-// header("Content-Type: text/plain"); // Change header temporarily
-// echo "DEBUGGING PHP OUTPUT:\n";
-// print_r($items);
-// exit;
-// --- END DEBUGGING CODE ---
-
 echo json_encode(["success" => true, "items" => $items]);
 $conn->close();
+
+?>

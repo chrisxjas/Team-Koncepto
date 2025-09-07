@@ -1,36 +1,39 @@
 <?php
 header('Content-Type: application/json');
 header("Access-Control-Allow-Origin: *");
+header("Access-Control-Allow-Methods: POST");
+header("Access-Control-Allow-Headers: Content-Type");
 
-$conn = new mysqli("localhost", "root", "", "koncepto1");
-
-if ($conn->connect_error) {
-    echo json_encode(["success" => false, "message" => "Connection failed"]);
-    exit();
-}
+include __DIR__ . '/db_connection.php'; // ✅ use separate DB connection
 
 $data = json_decode(file_get_contents('php://input'), true);
 
-$user_id = $data['user_id'] ?? null;
-$order_id = $data['order_id'] ?? null;
-$product_id = $data['product_id'] ?? null;
-$feedback = $data['feedback'] ?? '';
-$star = $data['star'] ?? null;
+$user_id = isset($data['user_id']) ? intval($data['user_id']) : 0;
+$order_id = isset($data['order_id']) ? intval($data['order_id']) : 0;
+$product_id = isset($data['product_id']) ? intval($data['product_id']) : 0;
+$feedback = trim($data['feedback'] ?? '');
+$star = isset($data['star']) ? intval($data['star']) : 0;
 
-if (!$user_id || !$order_id || !$product_id || trim($feedback) === '' || !$star) {
-    echo json_encode(["success" => false, "message" => "Missing required fields."]);
+// Validation
+if (!$user_id || !$order_id || !$product_id || $feedback === '' || $star <= 0 || $star > 5) {
+    echo json_encode(["success" => false, "message" => "Missing or invalid required fields."]);
     exit();
 }
 
-$stmt = $conn->prepare("INSERT INTO feedbacks (user_id, order_id, product_id, feedback, star, created_at, updated_at) 
-VALUES (?, ?, ?, ?, ?, NOW(), NOW())
-ON DUPLICATE KEY UPDATE feedback = VALUES(feedback), star = VALUES(star), updated_at = NOW()");
+// Insert or update feedback
+$sql = "INSERT INTO feedbacks (user_id, order_id, product_id, feedback, star, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, NOW(), NOW())
+        ON DUPLICATE KEY UPDATE feedback = VALUES(feedback), star = VALUES(star), updated_at = NOW()";
+
+$stmt = $conn->prepare($sql);
 $stmt->bind_param("iiisi", $user_id, $order_id, $product_id, $feedback, $star);
 
 if ($stmt->execute()) {
-    echo json_encode(["success" => true, "message" => "Feedback saved."]);
+    echo json_encode(["success" => true, "message" => "Feedback saved successfully."]);
 } else {
-    echo json_encode(["success" => false, "message" => "Failed to save feedback."]);
+    echo json_encode(["success" => false, "message" => "Failed to save feedback: " . $stmt->error]);
 }
 
+$stmt->close();
 $conn->close();
+?>

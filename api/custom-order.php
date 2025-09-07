@@ -1,83 +1,101 @@
 <?php
-header("Access-Control-Allow-Origin: *");
-header("Content-Type: application/json");
-header("Access-Control-Allow-Methods: POST, GET, OPTIONS");
-header("Access-Control-Allow-Headers: Content-Type, Access-Control-Allow-Headers, Authorization, X-Requested-With");
+header('Content-Type: application/json');
+header('Access-Control-Allow-Origin: *'); 
+header('Access-Control-Allow-Methods: POST, OPTIONS'); 
+header('Access-Control-Allow-Headers: Content-Type'); 
 
-// Database connection
-$conn = new mysqli("localhost", "root", "", "koncepto1"); // Adjust your database credentials here
+// Enable error reporting for development
+ini_set('display_errors', 1);
+ini_set('display_startup_errors', 1);
+error_reporting(E_ALL);
 
-if ($conn->connect_error) {
-    echo json_encode(["success" => false, "message" => "Database connection failed: " . $conn->connect_error]);
+// Include centralized DB connection
+include __DIR__ . '/db_connection.php';
+
+// Handle preflight OPTIONS request (CORS)
+if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
+    http_response_code(200);
     exit;
 }
 
-// Function to generate a random 8-character alphanumeric code
-function generateRandomCode($length = 8) {
-    $characters = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
-    $charactersLength = strlen($characters);
-    $randomString = '';
-    for ($i = 0; $i < $length; $i++) {
-        $randomString .= $characters[rand(0, $charactersLength - 1)];
-    }
-    return $randomString;
+// Get POST data from the request body
+$input = json_decode(file_get_contents('php://input'), true);
+
+// Validate received data
+$userId = isset($input['userId']) ? intval($input['userId']) : null;
+$categoryId = isset($input['categoryId']) ? intval($input['categoryId']) : null;
+$items = isset($input['items']) ? $input['items'] : [];
+
+if (!$userId || !$categoryId || !is_array($items) || count($items) === 0) {
+    echo json_encode(['success' => false, 'message' => 'Missing required fields (userId, categoryId, or items array is empty).']);
+    exit;
 }
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $data = json_decode(file_get_contents("php://input"), true);
+$now = date('Y-m-d H:i:s'); 
 
-    $productName = $data['productName'] ?? '';
-    $brandName = $data['brandName'] ?? '';
-    $category_id = $data['category_id'] ?? null; // Should be the ID, not name
-    $unit = $data['unit'] ?? '';
-    $quantity = $data['quantity'] ?? '';
-    $notes = $data['notes'] ?? null; // Optional
-    $user_id = $data['user_id'] ?? null;
+// Start transaction
+$conn->begin_transaction();
 
-    // Basic validation
-    if (empty($productName) || empty($brandName) || empty($category_id) || empty($unit) || empty($quantity) || empty($user_id)) {
-        echo json_encode(["success" => false, "message" => "Please fill all required fields (Product Name, Brand, Category, Unit, Quantity, User ID)."]);
-        exit;
+try {
+    // Insert into custom_order
+    $stmtOrder = $conn->prepare("
+        INSERT INTO custom_orders (user_id, created_at, updated_at)
+        VALUES (?, ?, ?)
+    ");
+    $stmtOrder->bind_param("iss", $userId, $now, $now);
+
+    if (!$stmtOrder->execute()) {
+        throw new Exception('Failed to insert into custom_orders: ' . $stmtOrder->error);
     }
+    $customOrderId = $stmtOrder->insert_id;
+    $stmtOrder->close();
 
-    // Generate unique code
-    $code = generateRandomCode();
-    // Optional: Add a loop to ensure code uniqueness in the database if collisions are a concern
-    // while (true) {
-    //     $checkCodeSql = "SELECT COUNT(*) FROM custom_order WHERE code = ?";
-    //     $stmt = $conn->prepare($checkCodeSql);
-    //     $stmt->bind_param("s", $code);
-    //     $stmt->execute();
-    //     $result = $stmt->get_result();
-    //     $row = $result->fetch_row();
-    //     if ($row[0] == 0) {
-    //         break; // Code is unique
-    //     }
-    //     $code = generateRandomCode(); // Generate a new one if not unique
-    // }
+    // Insert each item into custom_order_items
+    $stmtItem = $conn->prepare("
+        INSERT INTO custom_order_items
+        (custom_order_id, category_id, name, brand, unit, quantity, price, photo, description, gathered)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ");
 
-    $sql = "INSERT INTO custom_order (productName, brandName, category_id, unit, quantity, notes, code, user_id, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())";
+    foreach ($items as $it) {
+        $itemCategoryId = $categoryId; 
+        $name = $conn->real_escape_string($it['name'] ?? '');
+        $brand = $conn->real_escape_string($it['brand'] ?? null);
+        $unit = $conn->real_escape_string($it['unit'] ?? null);
+        $quantity = intval($it['quantity'] ?? 0);
+        $price = isset($it['price']) ? floatval($it['price']) : 0.00;
+        $photo = $conn->real_escape_string($it['photo'] ?? null);
+        $description = $conn->real_escape_string($it['description'] ?? null);
+        $gathered = isset($it['gathered']) ? intval($it['gathered']) : 0;
 
-    $stmt = $conn->prepare($sql);
+        $stmtItem->bind_param(
+            "iisssidssi",
+            $customOrderId,
+            $itemCategoryId,
+            $name,
+            $brand,
+            $unit,
+            $quantity,
+            $price,
+            $photo,
+            $description,
+            $gathered
+        );
 
-    if ($stmt === false) {
-        echo json_encode(["success" => false, "message" => "Prepare failed: " . $conn->error]);
-        exit;
+        if (!$stmtItem->execute()) {
+            throw new Exception('Failed to insert item "' . $name . '": ' . $stmtItem->error);
+        }
     }
+    $stmtItem->close();
 
-    $stmt->bind_param("ssiisssi", $productName, $brandName, $category_id, $unit, $quantity, $notes, $code, $user_id);
+    $conn->commit();
+    echo json_encode(['success' => true, 'custom_order_id' => $customOrderId, 'message' => 'Order submitted successfully.']);
 
-    if ($stmt->execute()) {
-        echo json_encode(["success" => true, "message" => "Custom order submitted successfully!", "code" => $code]);
-    } else {
-        echo json_encode(["success" => false, "message" => "Failed to submit custom order: " . $stmt->error]);
-    }
-
-    $stmt->close();
-} else {
-    echo json_encode(["success" => false, "message" => "Invalid request method."]);
+} catch (Exception $e) {
+    $conn->rollback();
+    error_log("Custom Order Error: " . $e->getMessage());
+    echo json_encode(['success' => false, 'message' => 'Transaction failed: ' . $e->getMessage()]);
+} finally {
+    $conn->close();
 }
-
-$conn->close();
 ?>

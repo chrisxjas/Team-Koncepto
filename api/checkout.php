@@ -9,12 +9,8 @@ header("Access-Control-Allow-Origin: *");
 header("Access-Control-Allow-Methods: POST");
 header("Access-Control-Allow-Headers: Content-Type");
 
-// Database connection
-$conn = new mysqli("localhost", "root", "", "koncepto1");
-if ($conn->connect_error) {
-    echo json_encode(["success" => false, "message" => "Database connection failed"]);
-    exit;
-}
+// Include centralized DB connection
+include __DIR__ . '/db_connection.php';
 
 // Parse incoming JSON
 $data = json_decode(file_get_contents("php://input"), true);
@@ -64,7 +60,7 @@ foreach ($selectedItems as $cart_item_id) {
 
         // Insert into order_detail
         $insertDetail = $conn->prepare("
-            INSERT INTO order_detail (order_id, product_id, quantity, price, created_at, updated_at)
+            INSERT INTO order_details (order_id, product_id, quantity, price, created_at, updated_at)
             VALUES (?, ?, ?, ?, ?, ?)
         ");
         $insertDetail->bind_param("iiidss", $order_id, $product_id, $quantity, $price, $now, $now);
@@ -88,3 +84,4 @@ $conn->query("
 // Final JSON response
 echo json_encode(["success" => true, "message" => "Checkout complete"]);
 $conn->close();
+?>

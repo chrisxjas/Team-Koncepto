@@ -20,6 +20,7 @@ import Checkbox from 'expo-checkbox';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { name as appName } from './app.json';
+import { BASE_URL } from './config'
 
 // Screens
 import ProductList from './product-list';
@@ -42,6 +43,7 @@ import Receipt from './receipt';
 import CustomOrder from './custom-order';
 import Points from './points';
 import ViewCustomOrder from './view-custom-order';
+import ViewOrderDetails from './view-order-details';
 
 const Stack = createNativeStackNavigator();
 
@@ -89,7 +91,7 @@ function LoginScreen({ navigation }) {
     if (!valid) return;
 
     try {
-      const response = await fetch('http://192.168.250.53/koncepto-app/api/login.php', {
+      const response = await fetch(`${BASE_URL}/login.php`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -215,6 +217,7 @@ function App() {
         <Stack.Screen name="CustomOrder" component={CustomOrder} options={{ headerShown: false }} />
         <Stack.Screen name="Points" component={Points} options={{ headerShown: false }} />
         <Stack.Screen name="ViewCustomOrder" component={ViewCustomOrder} options={{ headerShown: false }} />
+        <Stack.Screen name="ViewOrderDetails" component={ViewOrderDetails} options={{ headerShown: false }} />
       </Stack.Navigator>
     </NavigationContainer>
   );
@@ -228,23 +231,23 @@ const styles = StyleSheet.create({
   innerContainer: { flex: 1 },
   topSection: {
     flex: 1,
-    backgroundColor: colors.primaryGreen, // Use primary green
+    backgroundColor: colors.primaryGreen,
     justifyContent: 'center',
     alignItems: 'center',
   },
   logo: { width: 160, height: 100, resizeMode: 'contain' },
   loginSection: {
     flex: 2,
-    backgroundColor: colors.white, // Use white background
+    backgroundColor: colors.white,
     padding: 30,
     justifyContent: 'center',
   },
   welcomeText: {
-    fontSize: 28, // Slightly larger for emphasis
+    fontSize: 28,
     fontWeight: 'bold',
     marginBottom: 30,
     textAlign: 'center',
-    color: colors.textPrimary, // Use primary text color
+    color: colors.textPrimary,
   },
   errorText: {
     fontSize: 12,
@@ -253,13 +256,13 @@ const styles = StyleSheet.create({
     marginLeft: 5,
   },
   input: {
-    height: 50, // Slightly taller input
-    borderWidth: 1, // Change from borderBottomWidth to full border
-    borderColor: colors.greyBorder, // Use grey border color
-    borderRadius: 8, // Rounded corners for input fields
-    paddingHorizontal: 15, // Increased padding
+    height: 50,
+    borderWidth: 1,
+    borderColor: colors.greyBorder,
+    borderRadius: 8,
+    paddingHorizontal: 15,
     marginBottom: 20,
-    color: colors.textPrimary, // Text color for input
+    color: colors.textPrimary,
   },
   inputError: { borderColor: 'red' },
   rememberContainer: {
@@ -270,48 +273,48 @@ const styles = StyleSheet.create({
   rememberText: {
     marginLeft: 8,
     fontSize: 14,
-    color: colors.textSecondary, // Use secondary text color
+    color: colors.textSecondary,
   },
   loginButton: {
-    backgroundColor: colors.primaryGreen, // Use primary green
-    paddingVertical: 14, // Increased padding
-    borderRadius: 10, // More rounded corners
+    backgroundColor: colors.primaryGreen,
+    paddingVertical: 14,
+    borderRadius: 10,
     alignItems: 'center',
-    marginBottom: 10, // Added margin for spacing
-    shadowColor: '#000', // Add subtle shadow
+    marginBottom: 10,
+    shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.2,
     shadowRadius: 3,
     elevation: 3,
   },
-  buttonText: { // Renamed from loginText to a more general buttonText
+  buttonText: {
     color: colors.white,
     fontWeight: 'bold',
-    fontSize: 16, // Slightly larger font
+    fontSize: 16,
   },
   createAccountButton: {
     marginTop: 15,
-    paddingVertical: 14, // Increased padding
-    borderRadius: 10, // More rounded corners
+    paddingVertical: 14,
+    borderRadius: 10,
     alignItems: 'center',
-    borderColor: colors.primaryGreen, // Use primary green border
+    borderColor: colors.primaryGreen,
     borderWidth: 1,
-    backgroundColor: colors.white, // White background for outline button
+    backgroundColor: colors.white,
   },
   createAccountText: {
-    color: colors.primaryGreen, // Use primary green text
+    color: colors.primaryGreen,
     fontWeight: 'bold',
-    fontSize: 16, // Slightly larger font
+    fontSize: 16,
   },
   passwordContainer: {
     position: 'relative',
   },
   passwordInput: {
-    paddingRight: 50, // More space for the eye icon
+    paddingRight: 50,
   },
   eyeIcon: {
     position: 'absolute',
-    right: 15, // Adjusted position
-    top: 15, // Adjusted position
+    right: 15,
+    top: 15,
   },
 });

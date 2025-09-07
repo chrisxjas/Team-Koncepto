@@ -2,58 +2,58 @@
 header('Content-Type: application/json');
 header("Access-Control-Allow-Origin: *");
 
-$conn = new mysqli("localhost", "root", "", "koncepto1");
-
-// Check connection
-if ($conn->connect_error) {
-    echo json_encode(["success" => false, "message" => "Connection failed"]);
-    exit();
-}
+include __DIR__ . '/db_connection.php';
 
 $user_id = isset($_GET['user_id']) ? intval($_GET['user_id']) : 0;
-
 if ($user_id === 0) {
     echo json_encode(["success" => false, "message" => "Invalid user_id"]);
     exit();
 }
 
-// Get orders with status 'To Confirm' for the user including status field
+// Step 1: Fetch orders with status 'To Confirm'
 $order_sql = "SELECT id AS order_id, Orderdate, status 
               FROM orders 
-              WHERE user_id = $user_id AND status = 'To Confirm' 
+              WHERE user_id = ? AND status = 'To Confirm' 
               ORDER BY Orderdate DESC";
 
-$order_result = $conn->query($order_sql);
+$stmt_order = $conn->prepare($order_sql);
+$stmt_order->bind_param("i", $user_id);
+$stmt_order->execute();
+$order_result = $stmt_order->get_result();
+
 $orders = [];
 
-if ($order_result && $order_result->num_rows > 0) {
-    while ($order = $order_result->fetch_assoc()) {
-        $order_id = $order['order_id'];
+while ($order = $order_result->fetch_assoc()) {
+    $order_id = $order['order_id'];
 
-        // Get order items for this order
-        $items_sql = "SELECT 
-                        p.productName, 
-                        od.quantity, 
-                        od.price, 
-                        p.image,
-                        od.product_id
-                      FROM order_detail od
-                      JOIN products p ON od.product_id = p.id
-                      WHERE od.order_id = $order_id";
+    // Step 2: Fetch items for this order
+    $items_sql = "SELECT 
+                    p.id AS product_id,
+                    p.productName, 
+                    od.quantity, 
+                    od.price, 
+                    p.image
+                  FROM order_details od
+                  JOIN products p ON od.product_id = p.id
+                  WHERE od.order_id = ?";
 
-        $items_result = $conn->query($items_sql);
-        $items = [];
+    $stmt_items = $conn->prepare($items_sql);
+    $stmt_items->bind_param("i", $order_id);
+    $stmt_items->execute();
+    $items_result = $stmt_items->get_result();
 
-        if ($items_result && $items_result->num_rows > 0) {
-            while ($item = $items_result->fetch_assoc()) {
-                $items[] = $item;
-            }
-        }
-
-        $order['items'] = $items;
-        $orders[] = $order;
+    $items = [];
+    while ($item = $items_result->fetch_assoc()) {
+        $items[] = $item;
     }
+
+    $order['items'] = $items;
+    $orders[] = $order;
+
+    $stmt_items->close();
 }
+
+$stmt_order->close();
 
 echo json_encode([
     "success" => true,

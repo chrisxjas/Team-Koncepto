@@ -1,15 +1,13 @@
 <?php
 header("Content-Type: application/json");
 header("Access-Control-Allow-Origin: *");
+header("Access-Control-Allow-Methods: GET");
+header("Access-Control-Allow-Headers: Content-Type");
 
-$conn = new mysqli("localhost", "root", "", "koncepto1");
+// Include centralized DB connection
+include __DIR__ . '/db_connection.php';
 
-if ($conn->connect_error) {
-    echo json_encode(["success" => false, "message" => "DB connection failed: " . $conn->connect_error]);
-    exit;
-}
-
-$product_id = $_GET["product_id"] ?? null;
+$product_id = isset($_GET['product_id']) ? intval($_GET['product_id']) : null;
 
 if (!$product_id) {
     echo json_encode(["success" => false, "message" => "Missing product_id"]);
@@ -17,11 +15,12 @@ if (!$product_id) {
 }
 
 $sql = "
-    SELECT f.star, f.feedback, f.created_at, CONCAT(u.first_name, ' ', u.last_name) AS user_name
+    SELECT f.star, f.feedback, f.created_at, CONCAT(u.f_name, ' ', u.l_name) AS user_name
     FROM feedbacks f
     JOIN users u ON u.id = f.user_id
     WHERE f.product_id = ?
 ";
+
 $stmt = $conn->prepare($sql);
 $stmt->bind_param("i", $product_id);
 $stmt->execute();
@@ -36,4 +35,7 @@ echo json_encode([
     "success" => true,
     "data" => $feedbacks
 ]);
+
+$stmt->close();
+$conn->close();
 ?>

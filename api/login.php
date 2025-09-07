@@ -4,12 +4,7 @@ header("Access-Control-Allow-Origin: *");
 header("Access-Control-Allow-Methods: POST");
 header("Access-Control-Allow-Headers: Content-Type");
 
-$conn = new mysqli("localhost", "root", "", "koncepto1");
-
-if ($conn->connect_error) {
-    echo json_encode(["success" => false, "message" => "Database connection failed"]);
-    exit();
-}
+include __DIR__ . '/db_connection.php'; // Include DB connection
 
 $data = json_decode(file_get_contents("php://input"), true);
 $email = $data['email'] ?? '';
@@ -29,8 +24,8 @@ if ($result->num_rows === 1) {
     $user = $result->fetch_assoc();
     $storedPassword = $user['password'];
 
-    // If you're using password_hash() for storing passwords, use password_verify() here instead:
-    // if (password_verify($password, $storedPassword)) {
+    // If using password_hash() in the DB, replace the following line with:
+    // if (password_verify($password, $storedPassword)) { ... }
     if ($password === $storedPassword) {
         echo json_encode([
             "success" => true,

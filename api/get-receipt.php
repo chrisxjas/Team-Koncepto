@@ -1,67 +1,114 @@
 <?php
-header("Access-Control-Allow-Origin: *");
-header("Content-Type: application/json");
+// get-receipt.php
 
-$conn = new mysqli("localhost", "root", "", "koncepto1");
+// Enable error reporting for debugging
+ini_set('display_errors', 1);
+ini_set('display_startup_errors', 1);
+error_reporting(E_ALL);
 
-if ($conn->connect_error) {
-    echo json_encode(["success" => false, "message" => "Database connection failed: " . $conn->connect_error]);
-    exit;
+header('Content-Type: application/json');
+header('Access-Control-Allow-Origin: *');
+header('Access-Control-Allow-Methods: POST, OPTIONS');
+header('Access-Control-Allow-Headers: Content-Type, Authorization');
+
+if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
+    exit(0);
 }
 
-$user_id = $_GET['user_id'] ?? null;
-
-if (!$user_id) {
-    echo json_encode(["success" => false, "message" => "Missing user_id"]);
-    exit;
+// Include database connection
+include __DIR__ . '/db_connection.php';
+if (!$conn) {
+    echo json_encode(['status' => 'error', 'message' => 'Database connection failed']);
+    http_response_code(500);
+    exit();
 }
 
-// Fetch all receipts for the user, ordered by latest date
-$receipts_sql = "SELECT id, order_id, total_amount, created_at FROM receipts WHERE user_id = ? ORDER BY created_at DESC";
-$stmt_receipts = $conn->prepare($receipts_sql);
-$stmt_receipts->bind_param("i", $user_id);
-$stmt_receipts->execute();
-$receipts_result = $stmt_receipts->get_result();
+// Get POST data
+$input = file_get_contents('php://input');
+$data = json_decode($input, true);
 
-$receipts = [];
-while ($receipt_row = $receipts_result->fetch_assoc()) {
-    $receipt_id = $receipt_row['id'];
-    $receipt_data = [
-        "id" => $receipt_row['id'],
-        "order_id" => $receipt_row['order_id'],
-        "total_amount" => $receipt_row['total_amount'],
-        "receipt_date" => $receipt_row['created_at'], // Using created_at for receipt date
-        "items" => []
-    ];
+// Validate user_id
+if (!isset($data['user_id'])) {
+    echo json_encode(['status' => 'error', 'message' => 'User ID is required.']);
+    http_response_code(400);
+    exit();
+}
 
-    // Fetch items for each receipt
-    $items_sql = "
-        SELECT 
-            ri.id as item_id,
-            ri.quantity,
-            ri.price_at_purchase,
-            p.id as product_id,
-            p.productName,
-            p.image
-        FROM receipt_items ri
-        JOIN products p ON ri.product_id = p.id
-        WHERE ri.receipt_id = ?
+$userId = intval($data['user_id']);
+if ($userId <= 0) {
+    echo json_encode(['status' => 'error', 'message' => 'Invalid user ID.']);
+    http_response_code(400);
+    exit();
+}
+
+try {
+    // Fetch payments for the user
+    $sql = "
+        SELECT
+            p.id AS payment_id,
+            p.order_id,
+            p.order_type,
+            p.payment_method,
+            p.payment_proof,
+            p.status AS payment_status,
+            p.payment_date,
+            o.Orderdate,
+            o.Shipdate,
+            o.status AS order_status,
+            u.first_name,
+            u.last_name,
+            u.email
+        FROM payments p
+        LEFT JOIN orders o ON p.order_id = o.id
+        LEFT JOIN users u ON p.user_id = u.id
+        WHERE p.user_id = ?
+        ORDER BY p.created_at DESC
     ";
-    $stmt_items = $conn->prepare($items_sql);
-    $stmt_items->bind_param("i", $receipt_id);
-    $stmt_items->execute();
-    $items_result = $stmt_items->get_result();
 
-    while ($item_row = $items_result->fetch_assoc()) {
-        $item_total = (float)$item_row['quantity'] * (float)$item_row['price_at_purchase'];
-        $item_row['item_total'] = number_format($item_total, 2, '.', ''); // Format to 2 decimal places
-        $receipt_data['items'][] = $item_row;
+    $stmt = $conn->prepare($sql);
+    if (!$stmt) {
+        throw new Exception("SQL prepare failed: " . $conn->error);
     }
-    $stmt_items->close();
-    $receipts[] = $receipt_data;
-}
-$stmt_receipts->close();
 
-echo json_encode(["success" => true, "receipts" => $receipts]);
-$conn->close();
+    $stmt->bind_param("i", $userId);
+    $stmt->execute();
+    $result = $stmt->get_result();
+
+    $receipts = [];
+
+    while ($row = $result->fetch_assoc()) {
+        // Fetch items for each order
+        $items = [];
+        if (!empty($row['order_id'])) {
+            $stmtItems = $conn->prepare("
+                SELECT od.product_id, p.productName, od.quantity, od.price
+                FROM order_details od
+                JOIN products p ON od.product_id = p.id
+                WHERE od.order_id = ?
+            ");
+            if ($stmtItems) {
+                $stmtItems->bind_param("i", $row['order_id']);
+                $stmtItems->execute();
+                $itemsResult = $stmtItems->get_result();
+                while ($item = $itemsResult->fetch_assoc()) {
+                    $items[] = $item;
+                }
+                $stmtItems->close();
+            }
+        }
+
+        $row['items'] = $items;
+        $receipts[] = $row;
+    }
+
+    $stmt->close();
+    $conn->close();
+
+    echo json_encode(['status' => 'success', 'data' => $receipts]);
+
+} catch (Exception $e) {
+    error_log("Error in get-receipt.php: " . $e->getMessage());
+    echo json_encode(['status' => 'error', 'message' => 'Server error: ' . $e->getMessage()]);
+    http_response_code(500);
+}
 ?>

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -8,1508 +8,815 @@ import {
   ScrollView,
   Modal,
   TextInput,
-  Alert,
   ActivityIndicator,
   FlatList,
   Platform,
-  Animated,
   Dimensions,
   SafeAreaView,
   KeyboardAvoidingView,
+  Pressable,
 } from 'react-native';
 import Checkbox from 'expo-checkbox';
 import * as ImagePicker from 'expo-image-picker';
+import * as FileSystem from 'expo-file-system';
 import { Ionicons, FontAwesome } from '@expo/vector-icons';
-import { useNavigation, useNavigationState } from '@react-navigation/native';
+import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { BASE_URL } from './config';
 
 const screenWidth = Dimensions.get('window').width;
 
-// Define a consistent color palette for the entire app
 const colors = {
-  primaryGreen: '#4CAF50', // A vibrant green
-  darkerGreen: '#388E3C', // A slightly darker green for active states/accents
-  lightGreen: '#F0F8F0', // Very light green for backgrounds
-  accentGreen: '#8BC34A', // Another shade of green if needed
-  textPrimary: '#333333', // Dark text for readability
-  textSecondary: '#666666', // Lighter text for secondary info
+  primaryGreen: '#4CAF50',
+  darkerGreen: '#388E3C',
+  lightGreen: '#F0F8F0',
+  accentGreen: '#8BC34A',
+  textPrimary: '#333333',
+  textSecondary: '#666666',
   white: '#FFFFFF',
-  greyBorder: '#DDDDDD', // Light grey for borders and lines
-  lightGreyBackground: '#FAFAFA', // General light background
-  errorRed: '#e53935', // For prices and errors, or special alerts
-  gold: '#FFD700', // For the coin icon
+  greyBorder: '#DDDDDD',
+  lightGreyBackground: '#FAFAFA',
+  errorRed: '#e53935',
 };
 
-// Define the API base URL here, outside the component to prevent re-creation
-const API_BASE_URL = 'http://192.168.250.53/koncepto-app/';
-
-export default function CustomOrder({ route }) {
+const CustomOrder = ({ route }) => {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
+  const { user } = route.params;
 
-  const userFromParams = route.params?.user || {};
-  const [user, setUser] = useState(userFromParams);
+  const [orderItems, setOrderItems] = useState([]);
+  const [itemName, setItemName] = useState('');
+  const [itemBrand, setItemBrand] = useState('');
+  const [itemUnit, setItemUnit] = useState('');
+  const [itemQuantity, setItemQuantity] = useState('');
+  const [itemDescription, setItemDescription] = useState('');
+  const [itemImage, setItemImage] = useState(null);
+  const [itemGathered, setItemGathered] = useState(false);
 
-  const [modalVisible, setModalVisible] = useState(false); // For profile picture options
-  const [uploading, setUploading] = useState(false);
-  const [settingsVisible, setSettingsVisible] = useState(false);
+  const [categories, setCategories] = useState([]);
+  const [selectedOrderCategory, setSelectedOrderCategory] = useState(null);
 
-  const [slideAnim] = useState(new Animated.Value(screenWidth));
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [successModalVisible, setSuccessModalVisible] = useState(false);
+  const [errorModalVisible, setErrorModalVisible] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
+  const [isImagePickerModalVisible, setImagePickerModalVisible] = useState(false);
+  const [isCategoryModalVisible, setIsCategoryModalVisible] = useState(false);
 
-  const [selectedItems, setSelectedItems] = useState({});
-  const hasSelectedItems = Object.values(selectedItems).some(selected => selected);
-
-  const [frequentlyPurchasedItems, setFrequentlyPurchasedItems] = useState([]);
-  const [starterPackItems, setStarterPackItems] = useState([]);
-  const [loadingRecommendations, setLoadingRecommendations] = useState(true);
-  const [hasCustomOrders, setHasCustomOrders] = useState(false);
-
-  const flatListRef = useRef(null);
-  const scrollIndex = useRef(0);
-  const autoScrollInterval = useRef(null);
-  const userInteracted = useRef(false);
-
-  // States for account editing modals (email/password)
-  const [editAccountModalVisible, setEditAccountModalVisible] = useState(false);
-  const [newEmail, setNewEmail] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmNewPassword, setConfirmNewPassword] = useState('');
-  const [passwordVerificationModalVisible, setPasswordVerificationModalVisible] = useState(false);
-  const [currentPasswordInput, setCurrentPasswordInput] = useState('');
-  const [confirmChangesModalVisible, setConfirmChangesModalVisible] = useState(false);
-
-
-  // --- Fetch User Data (including email) ---
-  const fetchUserData = useCallback(async () => {
-    if (!userFromParams.id) {
-      console.warn("User ID not available for fetching profile data.");
-      setLoadingRecommendations(false); // Stop loading if no user ID
-      return;
-    }
-    try {
-      const response = await fetch(`${API_BASE_URL}api/get-user.php?id=${userFromParams.id}`);
-      const resJson = await response.json();
-      if (resJson.success && resJson.user) {
-        setUser(resJson.user);
-        setNewEmail(resJson.user.email); // Initialize newEmail with current email
-      } else {
-        console.log('Failed to fetch user data:', resJson.message || 'Unknown error');
-      }
-    } catch (err) {
-      console.error('Fetch user data network error:', err);
-    }
-  }, [userFromParams.id]);
-
-  // --- Fetch Recommendations ---
-  const fetchFrequentlyPurchasedItems = useCallback(async () => {
-    if (!user.id) return;
-    try {
-      const response = await fetch(`${API_BASE_URL}api/get-frequently-purchased.php?user_id=${user.id}`);
-      const resJson = await response.json();
-      if (resJson.success && resJson.items) {
-        setFrequentlyPurchasedItems(resJson.items);
-      }
-    } catch (err) {
-      console.error('Failed to fetch frequently purchased items:', err);
-    }
-  }, [user.id]);
-
-  const fetchStarterPackItems = useCallback(async () => {
-    if (!user.id) return;
-    try {
-      const response = await fetch(`${API_BASE_URL}api/get-starter-pack.php?user_id=${user.id}`);
-      const resJson = await response.json();
-      if (resJson.success && resJson.items) {
-        setStarterPackItems(resJson.items);
-      }
-    } catch (err) {
-      console.error('Failed to fetch starter pack items:', err);
-    }
-  }, [user.id]);
-
-  // --- Check for Custom Orders ---
-  const checkCustomOrders = useCallback(async () => {
-    console.log('checkCustomOrders called. User ID:', user.id); // Debugging
-    if (!user.id) {
-      console.log('User ID is null or undefined, returning.'); // Debugging
-      return;
-    }
-    try {
-      const response = await fetch(`${API_BASE_URL}api/check-custom-orders.php?user_id=${user.id}`);
-      const resJson = await response.json();
-      console.log('checkCustomOrders response:', resJson); // Debugging: See the full response
-      if (resJson.success && typeof resJson.has_orders === 'boolean') {
-        setHasCustomOrders(resJson.has_orders);
-        console.log('hasCustomOrders set to:', resJson.has_orders); // Debugging
-      } else {
-        console.log('checkCustomOrders: Response not successful or has_orders not boolean.', resJson); // Debugging
-        setHasCustomOrders(false); // Default to false on error or malformed response
-      }
-    } catch (err) {
-      console.error('Failed to check custom orders:', err);
-      setHasCustomOrders(false); // Default to false on network error
-    }
-  }, [user.id]);
-
+  const [submittedOrderId, setSubmittedOrderId] = useState(null);
 
   useEffect(() => {
-    const initializeData = async () => {
-      setLoadingRecommendations(true);
-      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert('Permission required', 'Media library access is needed to upload your photo.');
-      }
-      await fetchUserData(); // Fetch user data first
-      // After user data is potentially updated, fetch other data
-      await Promise.all([
-        fetchFrequentlyPurchasedItems(),
-        fetchStarterPackItems(),
-        checkCustomOrders(),
-      ]);
-      setLoadingRecommendations(false);
-    };
+    (async () => {
+      if (Platform.OS !== 'web') {
+        const { status: cameraStatus } = await ImagePicker.requestCameraPermissionsAsync();
+        const { status: mediaLibraryStatus } = await ImagePicker.requestMediaLibraryPermissionsAsync();
 
-    initializeData();
-
-    // Re-fetch data when the screen is focused
-    const unsubscribeFocus = navigation.addListener('focus', () => {
-      fetchUserData();
-      fetchFrequentlyPurchasedItems();
-      fetchStarterPackItems();
-      checkCustomOrders();
-    });
-
-    return unsubscribeFocus; // Clean up the listener
-  }, [fetchUserData, fetchFrequentlyPurchasedItems, fetchStarterPackItems, checkCustomOrders, navigation]);
-
-  useEffect(() => {
-    const startAutoScroll = () => {
-      autoScrollInterval.current = setInterval(() => {
-        if (flatListRef.current && !userInteracted.current && recommendationSections.length > 1) {
-          scrollIndex.current = (scrollIndex.current + 1) % recommendationSections.length;
-          flatListRef.current.scrollToIndex({ animated: true, index: scrollIndex.current });
-        }
-      }, 5000);
-    };
-
-    const stopAutoScroll = () => {
-      if (autoScrollInterval.current) {
-        clearInterval(autoScrollInterval.current);
-        autoScrollInterval.current = null;
-      }
-    };
-
-    stopAutoScroll();
-    startAutoScroll();
-
-    return () => stopAutoScroll();
-  }, [frequentlyPurchasedItems, starterPackItems]);
-
-  const handleScrollBeginDrag = () => {
-    userInteracted.current = true;
-    if (autoScrollInterval.current) {
-      clearInterval(autoScrollInterval.current);
-    }
-  };
-
-  const handleScrollEndDrag = () => {
-    setTimeout(() => {
-      userInteracted.current = false;
-      if (!autoScrollInterval.current) {
-        autoScrollInterval.current = setInterval(() => {
-          if (flatListRef.current && !userInteracted.current && recommendationSections.length > 1) {
-            scrollIndex.current = (scrollIndex.current + 1) % recommendationSections.length;
-            flatListRef.current.scrollToIndex({ animated: true, index: scrollIndex.current });
-          }
-        }, 5000);
-      }
-    }, 2000);
-  };
-
-  const openSettings = () => {
-    setSettingsVisible(true);
-    Animated.timing(slideAnim, {
-      toValue: 0,
-      duration: 300,
-      useNativeDriver: true,
-    }).start();
-  };
-
-  const closeSettings = () => {
-    Animated.timing(slideAnim, {
-      toValue: screenWidth,
-      duration: 300,
-      useNativeDriver: true,
-    }).start(() => setSettingsVisible(false));
-  };
-
-  const pickImage = async () => {
-    try {
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        quality: 1,
-        allowsEditing: true,
-        aspect: [1, 1],
-      });
-
-      if (!result.canceled && result.assets.length > 0) {
-        const selectedAsset = result.assets[0];
-        if (selectedAsset.uri) {
-          uploadImage(selectedAsset.uri);
+        if (cameraStatus !== 'granted' || mediaLibraryStatus !== 'granted') {
+          console.warn('Camera or Media Library permissions not granted.');
         }
       }
-    } catch (e) {
-      Alert.alert('Error', 'Failed to pick image.');
-    }
-  };
+    })();
+    fetchCategories();
+  }, []);
 
-  const uploadImage = async (uri) => {
-    setUploading(true);
+  const fetchCategories = async () => {
     try {
-      const filename = uri.split('/').pop();
-      const match = /\.(\w+)$/.exec(filename);
-      const type = match ? `image/${match[1]}` : `image`;
-
-      const formData = new FormData();
-      formData.append('photo', {
-        uri,
-        name: filename,
-        type,
-      });
-      formData.append('id', user.id);
-
-      const response = await fetch(`${API_BASE_URL}api/upload-profile-image.php`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
-        body: formData,
-      });
-
-      const resJson = await response.json();
-      if (resJson.success && resJson.profilepic) {
-        setUser((prev) => ({ ...prev, profilepic: resJson.profilepic }));
-        Alert.alert('Success', 'Profile picture updated.');
+      const response = await fetch(`${BASE_URL}/get-categories.php`);
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('HTTP Error fetching categories:', response.status, response.statusText, errorText);
+        setErrorMessage(`Failed to load categories: Server responded with status ${response.status}.`);
+        setErrorModalVisible(true);
+        return;
+      }
+      const data = await response.json();
+      if (data.success) {
+        setCategories(data.categories);
       } else {
-        Alert.alert('Upload failed', resJson.message || 'Something went wrong.');
+        setErrorMessage(data.message || 'Failed to fetch categories.');
+        setErrorModalVisible(true);
       }
     } catch (error) {
-      Alert.alert('Error', 'Failed to upload profile picture.');
-    } finally {
-      setUploading(false);
-      setModalVisible(false);
+      console.error('Network error fetching categories:', error);
+      setErrorMessage('Failed to connect to the server to fetch categories. Please check your network connection.');
+      setErrorModalVisible(true);
     }
   };
 
-  const handleAddToCart = async (itemsToAdd) => {
-    const selectedIds = Object.entries(selectedItems)
-      .filter(([id, isSelected]) => isSelected)
-      .map(([id]) => id);
-
-    if (selectedIds.length === 0) {
-      Alert.alert('No items selected', 'Please select at least one item to add to cart.');
-      return;
-    }
-
+  const pickImage = async (sourceType) => {
+    setImagePickerModalVisible(false);
+    let result;
     try {
-      for (const itemId of selectedIds) {
-        const item = itemsToAdd.find(item => item.id.toString() === itemId);
-        if (!item) continue;
-
-        await fetch(`${API_BASE_URL}api/add-to-cart.php`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            user_id: user.id,
-            product_id: item.product_id,
-            quantity: 1,
-          }),
+      if (sourceType === 'camera') {
+        result = await ImagePicker.launchCameraAsync({
+          mediaTypes: ImagePicker.MediaTypeOptions.Images,
+          allowsEditing: true,
+          aspect: [4, 3],
+          quality: 0.5,
+        });
+      } else {
+        result = await ImagePicker.launchImageLibraryAsync({
+          mediaTypes: ImagePicker.MediaTypeOptions.Images,
+          allowsEditing: true,
+          aspect: [4, 3],
+          quality: 0.5,
         });
       }
-      Alert.alert('Success', 'Items added to cart.');
-      navigation.navigate('Carts', { user });
+
+      if (!result.canceled) {
+        const imageUri = result.assets[0].uri;
+        const base64 = await FileSystem.readAsStringAsync(imageUri, { encoding: FileSystem.EncodingType.Base64 });
+        setItemImage(`data:${result.assets[0].mimeType};base64,${base64}`);
+      }
     } catch (error) {
-      console.error('Add to cart error:', error);
-      Alert.alert('Error', 'Failed to add items to cart.');
+      console.error('Image picking or processing error:', error);
+      setErrorMessage("Failed to process image. Make sure permissions are granted.");
+      setErrorModalVisible(true);
+    }
+  };
+
+  const addItemToOrder = () => {
+    if (!itemName.trim() || !itemQuantity.trim() || !itemUnit.trim() || !itemBrand.trim()) {
+      setErrorMessage('Please enter item name, brand, unit, and quantity for the item.');
+      setErrorModalVisible(true);
+      return;
+    }
+    if (isNaN(itemQuantity) || parseFloat(itemQuantity) <= 0) {
+      setErrorMessage('Quantity must be a positive number.');
+      setErrorModalVisible(true);
+      return;
+    }
+
+    const newItem = {
+      id: Date.now().toString(),
+      name: itemName.trim(),
+      brand: itemBrand.trim(),
+      unit: itemUnit.trim(),
+      quantity: parseFloat(itemQuantity),
+      description: itemDescription.trim(),
+      image: itemImage,
+      gathered: itemGathered,
+    };
+    setOrderItems([...orderItems, newItem]);
+    setItemName('');
+    setItemBrand('');
+    setItemUnit('');
+    setItemQuantity('');
+    setItemDescription('');
+    setItemImage(null);
+    setItemGathered(false);
+  };
+
+  const removeItem = (id) => {
+    setOrderItems(orderItems.filter(item => item.id !== id));
+  };
+
+  const submitOrder = async () => {
+    // ✅ CORRECTED: Added explicit check for user ID
+    if (!user || !user.id) {
+      setErrorMessage('User not found. Please log in again.');
+      setErrorModalVisible(true);
+      return;
+    }
+
+    if (orderItems.length === 0) {
+      setErrorMessage('Your custom order is empty. Please add items before submitting.');
+      setErrorModalVisible(true);
+      return;
+    }
+    if (!selectedOrderCategory) {
+      setErrorMessage('Please select a category for your custom order from the "Overall Order Details" section.');
+      setErrorModalVisible(true);
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const orderData = {
+      user_id: user.id, // <-- use user_id
+      categoryId: selectedOrderCategory,
+      items: orderItems.map(item => ({
+        name: item.name,
+        brand: item.brand,
+        unit: item.unit,
+        quantity: item.quantity,
+        photo: item.image,
+        description: item.description,
+        gathered: item.gathered ? 1 : 0,
+      })),
+    };
+
+      console.log('Attempting to submit order with data:', JSON.stringify(orderData, null, 2));
+
+      // ✅ CORRECTED: Replaced API_BASE with BASE_URL
+      const response = await fetch(`${BASE_URL}/get-custom-order.php`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(orderData),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('HTTP Error during order submission:', response.status, response.statusText, errorText);
+        setErrorMessage(`Server error during submission: ${response.status} - ${errorText || 'No response text'}`);
+        setErrorModalVisible(true);
+        return;
+      }
+
+      const result = await response.json();
+      console.log('API Response for order submission:', result);
+
+      if (result.success) {
+        setSubmittedOrderId(result.custom_order_id);
+        setSuccessModalVisible(true);
+        setOrderItems([]);
+        setSelectedOrderCategory(null);
+      } else {
+        setErrorMessage(result.message || 'Failed to submit order. Please try again.');
+        setErrorModalVisible(true);
+      }
+    } catch (error) {
+      console.error('Network or unexpected error during order submission:', error);
+      setErrorMessage('An unexpected error occurred. Please check your network connection and server status.');
+      setErrorModalVisible(true);
     } finally {
-      setSelectedItems({});
+      setIsSubmitting(false);
     }
   };
 
-  const handleBuyNow = (itemsToBuy) => {
-    const selected = itemsToBuy
-      .filter(item => selectedItems[item.id])
-      .map(item => ({
-        product_id: item.product_id,
-        productName: item.name,
-        price: parseFloat(item.price), // Ensure price is numeric
-        quantity: 1,
-        image: item.image,
-      }));
-
-    if (selected.length === 0) {
-      Alert.alert('No items selected', 'Please select at least one item to proceed.');
-      return;
-    }
-
-    const total = selected.reduce((sum, item) => sum + parseFloat(item.price), 0);
-
-    navigation.navigate('PlaceRequest', {
-      user,
-      selectedItems: selected,
-      total,
-    });
-    setSelectedItems({});
-  };
-
-  const handleDeletePicture = async () => {
-    setModalVisible(false);
-    Alert.alert(
-      'Delete Profile Picture',
-      'Are you sure you want to delete your profile picture?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              const response = await fetch(`${API_BASE_URL}api/delete-profile-image.php?user_id=${user.id}`);
-              const resJson = await response.json();
-              if (resJson.success) {
-                setUser((prev) => ({ ...prev, profilepic: null }));
-                Alert.alert('Deleted', 'Profile picture deleted.');
-              } else {
-                Alert.alert('Error', resJson.message || 'Could not delete profile picture.');
-              }
-            } catch {
-              Alert.alert('Error', 'Failed to delete profile picture.');
-            }
-          },
-        },
-      ]
-    );
-  };
-
-  const recommendationSections = [
-    {
-      key: 'frequentlyPurchased',
-      title: 'Frequently Purchased Items',
-      description: 'Based on your purchase habits, you might need these:',
-      items: frequentlyPurchasedItems,
-      emptyMessage: 'No frequently purchased recommendations yet.',
-    },
-    {
-      key: 'starterPack',
-      title: 'Starter Pack Recommendations',
-      description: 'Get started with these essential items:',
-      items: starterPackItems,
-      emptyMessage: 'No starter pack recommendations available.',
-    },
-  ];
-
-  const scrollRecommendation = (direction) => {
-    userInteracted.current = true;
-    if (autoScrollInterval.current) {
-      clearInterval(autoScrollInterval.current);
-      autoScrollInterval.current = null;
-    }
-
-    let nextIndex = scrollIndex.current;
-    if (direction === 'next') {
-      nextIndex = (scrollIndex.current + 1) % recommendationSections.length;
-    } else if (direction === 'prev') {
-      nextIndex = (scrollIndex.current - 1 + recommendationSections.length) % recommendationSections.length;
-    }
-
-    flatListRef.current.scrollToIndex({ animated: true, index: nextIndex });
-    scrollIndex.current = nextIndex;
-
-    setTimeout(() => {
-      userInteracted.current = false;
-      if (!autoScrollInterval.current) {
-        autoScrollInterval.current = setInterval(() => {
-          if (flatListRef.current && !userInteracted.current && recommendationSections.length > 1) {
-            scrollIndex.current = (scrollIndex.current + 1) % recommendationSections.length;
-            flatListRef.current.scrollToIndex({ animated: true, index: scrollIndex.current });
-          }
-        }, 5000);
-      }
-    }, 2000);
-  };
-
-  const renderRecommendationSlide = ({ item: section }) => {
-    const isAnyItemSelectedInSection = section.items.some(
-      (item) => selectedItems[item.id]
-    );
-
-    return (
-      <View style={styles.recommendBoxContainer}>
-        <Text style={[styles.sectionTitle, { textAlign: 'center', marginBottom: 2, fontSize: 12, fontWeight: 'bold' }]}>
-          {section.title}
-        </Text>
-        <View style={styles.recommendBox}>
-          <View style={styles.row}>
-            <Ionicons name="calendar-outline" size={16} color={colors.primaryGreen} />
-            <Text style={styles.recommendText}>
-              {section.description}
-            </Text>
-          </View>
-
-          {loadingRecommendations ? (
-            // FIX: Moved comment to a separate line to resolve SyntaxError
-            <ActivityIndicator size="small" color={colors.primaryGreen} style={{ marginTop: 5 }} />
-          ) : section.items.length === 0 ? (
-            <Text style={{ marginTop: 2, fontStyle: 'italic', color: colors.textSecondary, fontSize: 9 }}>
-              {section.emptyMessage}
-            </Text>
-          ) : (
-            <>
-              {section.items.map(item => (
-                <TouchableOpacity
-                  key={item.id}
-                  style={styles.itemRow}
-                  activeOpacity={0.7}
-                  onPress={() =>
-                    setSelectedItems(prev => ({
-                      ...prev,
-                      [item.id]: !prev[item.id],
-                    }))
-                  }
-                >
-                  <Checkbox
-                    value={!!selectedItems[item.id]}
-                    onValueChange={() =>
-                      setSelectedItems(prev => ({
-                        ...prev,
-                        [item.id]: !prev[item.id],
-                      }))
-                    }
-                    color={selectedItems[item.id] ? colors.primaryGreen : undefined}
-                  />
-                  <Image
-                    source={{ uri: `${API_BASE_URL}assets/${item.image}` }}
-                    style={styles.itemImage}
-                    onError={(e) => console.log('Image Load Error:', e.nativeEvent.error, 'for URI:', `${API_BASE_URL}assets/${item.image}`)}
-                  />
-                  <Text style={styles.itemText}>
-                    {(item.name ? item.name : '') + ' - ₱' + (item.price ? parseFloat(item.price).toFixed(2) : '0.00')}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-
-              {section.items.length > 0 && (
-                <View style={styles.buttonRow}>
-                  <TouchableOpacity
-                    style={[
-                      styles.cartButton,
-                      isAnyItemSelectedInSection && styles.cartButtonActive,
-                    ]}
-                    onPress={() => handleAddToCart(section.items)}
-                    disabled={!isAnyItemSelectedInSection}
-                  >
-                    <Text
-                      style={[
-                        styles.buttonText,
-                        isAnyItemSelectedInSection && styles.cartButtonTextActive,
-                      ]}
-                    >
-                      Add to Cart
-                    </Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[
-                      styles.buyButton,
-                      !isAnyItemSelectedInSection && { backgroundColor: colors.textSecondary }
-                    ]}
-                    onPress={() => handleBuyNow(section.items)}
-                    disabled={!isAnyItemSelectedInSection}
-                  >
-                    <Text style={styles.buttonText}>Buy Now</Text>
-                  </TouchableOpacity>
-                </View>
-              )}
-            </>
-          )}
-        </View>
+  const renderOrderItem = ({ item }) => (
+    <View style={styles.orderItemCard}>
+      {item.image && <Image source={{ uri: item.image }} style={styles.orderItemImage} />}
+      <View style={styles.orderItemDetails}>
+        <Text style={styles.orderItemName}>{item.name}</Text>
+        <Text style={styles.orderItemBrand}>Brand: {item.brand}</Text>
+        <Text style={styles.orderItemQuantity}>Qty: {item.quantity} {item.unit}</Text>
+        {item.description ? <Text style={styles.orderItemNotes}>Desc: {item.description}</Text> : null}
       </View>
-    );
-  };
-
-  // --- Input Validation Functions (from AccountCredentials.js logic) ---
-  const validateEmail = useCallback((email) => {
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    return emailRegex.test(email);
-  }, []);
-
-  const validatePassword = useCallback((password) => {
-    return password.length >= 8;
-  }, []);
-
-  // --- Open Edit Account Modal (initiates password verification) ---
-  const openEditAccountModal = useCallback(() => {
-    if (user) {
-      setNewEmail(user.email); // Pre-fill with current email
-      setNewPassword(''); // Always clear password fields
-      setConfirmNewPassword('');
-      setCurrentPasswordInput(''); // Clear current password input
-      setPasswordVerificationModalVisible(true); // First, show password verification modal
-    }
-  }, [user]);
-
-  // --- Handle Current Password Verification ---
-  const handleVerifyCurrentPassword = useCallback(async () => {
-    if (!currentPasswordInput) {
-      Alert.alert('Validation Error', 'Please enter your current password.');
-      return;
-    }
-
-    try {
-      const response = await fetch(`${API_BASE_URL}api/verify_current_password.php`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          user_id: user.id,
-          current_password: currentPasswordInput,
-        }),
-      });
-      const data = await response.json();
-
-      if (data.success) {
-        setPasswordVerificationModalVisible(false); // Close verification modal
-        setEditAccountModalVisible(true); // Open edit modal
-      } else {
-        Alert.alert('Error', data.message || 'Incorrect current password. Please try again.');
-      }
-    } catch (error) {
-      console.error('Password Verification Error:', error);
-      Alert.alert('Error', 'Network error. Please try again.');
-    }
-  }, [user?.id, currentPasswordInput]);
-
-  // --- Handle Save Account Options (validates new inputs) ---
-  const handleSaveAccountOptions = useCallback(() => {
-    // Check if new email/password are identical to current ones
-    const isEmailSame = newEmail === user.email;
-    const isPasswordProvided = newPassword !== '';
-
-    if (isEmailSame && !isPasswordProvided) {
-      Alert.alert('Validation Error', 'No changes detected. Please modify email or password to save.');
-      return;
-    }
-
-    // Validate new email if it's changed
-    if (!isEmailSame && !validateEmail(newEmail)) {
-      Alert.alert('Validation Error', 'Invalid email format');
-      return;
-    }
-
-    // Validate new password if provided
-    if (isPasswordProvided) {
-      if (!validatePassword(newPassword)) {
-        Alert.alert('Validation Error', 'Password must be at least 8 characters');
-        return;
-      }
-      if (newPassword !== confirmNewPassword) {
-        Alert.alert('Validation Error', 'New password and confirm password do not match.');
-        return;
-      }
-    }
-
-    // Show final confirmation modal
-    setConfirmChangesModalVisible(true);
-  }, [newEmail, newPassword, confirmNewPassword, user, validateEmail, validatePassword]);
-
-  // --- Confirm and Send Changes to Backend ---
-  const confirmChanges = useCallback(async () => {
-    setConfirmChangesModalVisible(false); // Close confirmation modal
-
-    try {
-      const response = await fetch(`${API_BASE_URL}api/update_account_options.php`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          user_id: user.id,
-          new_email: newEmail,
-          new_password: newPassword, // Send empty string if not changing
-        }),
-      });
-      const data = await response.json();
-
-      if (data.success) {
-        Alert.alert('Success', 'Account details updated successfully!');
-        setEditAccountModalVisible(false); // Close edit modal
-        fetchUserData(); // Re-fetch profile to show updated email
-      } else {
-        Alert.alert('Error', data.message || 'Failed to update account details.');
-      }
-    } catch (error) {
-      console.error('Update Account Options Error:', error);
-      Alert.alert('Error', 'Network error. Please try again.');
-    }
-  }, [user?.id, newEmail, newPassword, fetchUserData]);
-
-
-  // Determine active tab for bottom navigation using useNavigationState
-  // This is more robust for nested navigators than route.name directly
-  const routeName = useNavigationState(state => state.routes[state.index].name);
-  const currentRouteName = routeName;
-
-  const isHomeActive = currentRouteName === 'ProductList';
-  const isChatActive = currentRouteName === 'Message' || currentRouteName === 'ChatBot';
-  const isCartActive = currentRouteName === 'Carts';
-  const isAccountActive = currentRouteName === 'Profile' || currentRouteName === 'MyProfile' || currentRouteName === 'AccountOptions';
-
-
-  // Fallback for profile image if user.profilepic is not available or invalid
-  const profileImageSource = user?.profilepic && user.profilepic !== 'null'
-    ? { uri: `${API_BASE_URL}api/uploads/${user.profilepic}?t=${Date.now()}` }
-    : require('./assets/user.png'); // Ensure you have a default-profile.png in your assets folder
-
-  if (loadingRecommendations && !user?.id) { // Show initial loader if user data is not yet loaded
-    return (
-      <View style={styles.loaderContainer}>
-        <ActivityIndicator size="large" color={colors.primaryGreen} />
-        <Text style={styles.loaderText}>Loading profile...</Text>
-      </View>
-    );
-  }
+      <TouchableOpacity onPress={() => removeItem(item.id)} style={styles.removeButton}>
+        <Ionicons name="close-circle" size={20} color={colors.errorRed} />
+      </TouchableOpacity>
+    </View>
+  );
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={[styles.safeArea, { paddingTop: insets.top }]}>
+      <View style={styles.headerContainer}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+          <Ionicons name="arrow-back" size={24} color={colors.white} />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Custom Order</Text>
+      </View>
+
       <KeyboardAvoidingView
+        style={styles.keyboardAvoidingView}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={{ flex: 1 }}
       >
-        {/* Fixed Header */}
-        <View style={[styles.header, { paddingTop: insets.top }]}>
-          <TouchableOpacity onPress={() => setModalVisible(true)} style={styles.profileIcon}>
-            <Image
-              source={profileImageSource}
-              style={styles.profileImage}
-              onError={(e) => console.log('Profile Image Load Error:', e.nativeEvent.error)}
+        <ScrollView contentContainerStyle={styles.scrollViewContent}>
+          <View style={styles.formContainer}>
+            <Text style={styles.formTitle}>Add New Item</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Item Name (e.g., Bondpaper)"
+              placeholderTextColor={colors.textSecondary}
+              value={itemName}
+              onChangeText={setItemName}
             />
-          </TouchableOpacity>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.name}>{user.first_name ?? 'First Name'} {user.last_name ?? 'Last Name'}</Text>
-            <Text style={styles.school}>{user.school_name ? `${user.school_name}` : 'School: N/A'}</Text>
-            <Text style={styles.email}>{user.email ?? 'email@example.com'}</Text>
-          </View>
-          {/* Coin Icon and Settings Icon Container */}
-          <View style={styles.headerIconsContainer}>
-            {/* Coin Icon Button */}
-            <TouchableOpacity style={styles.coinIcon} onPress={() => navigation.navigate('Points', { user })}>
-              <FontAwesome name="money" size={20} color={colors.gold} /> {/* Smaller icon */}
-            </TouchableOpacity>
-            {/* Settings Icon Button */}
-            <TouchableOpacity style={styles.settingsIcon} onPress={openSettings}>
-              <Ionicons name="settings-outline" size={20} color="white" /> {/* Smaller icon */}
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {/* "View Order Request" Button below header - conditionally rendered */}
-        {hasCustomOrders && (
-          <TouchableOpacity
-            style={styles.viewOrderRequestButton}
-            onPress={() => navigation.navigate('ViewCustomOrder', { user })}
-          >
-            <Text style={styles.viewOrderRequestButtonText}>View Order Request</Text>
-          </TouchableOpacity>
-        )}
-
-        {/* Scrollable Content */}
-        <ScrollView style={styles.scrollableContent}>
-          <View style={styles.section}>
-            <Text style={styles.sectionHeading}>Recommendations</Text>
-            <Text style={styles.description}>
-              Discover items based on your past purchases or get started with essential packs.
-            </Text>
-
-            <View style={styles.recommendationsWrapper}>
-              <TouchableOpacity
-                style={[styles.arrowButton, { left: 0 }]}
-                onPress={() => scrollRecommendation('prev')}
-              >
-                <Ionicons name="chevron-back-circle-outline" size={30} color="black" style={{ opacity: 0.5 }} />
-              </TouchableOpacity>
-
-              <FlatList
-                ref={flatListRef}
-                data={recommendationSections}
-                renderItem={renderRecommendationSlide}
-                keyExtractor={(item) => item.key}
-                horizontal
-                pagingEnabled
-                showsHorizontalScrollIndicator={false}
-                onScrollBeginDrag={handleScrollBeginDrag}
-                onScrollEndDrag={handleScrollEndDrag}
-                contentContainerStyle={styles.recommendationsFlatListContainer}
-                onLayout={() => flatListRef.current?.scrollToIndex({ animated: false, index: scrollIndex.current })}
-                getItemLayout={(_, index) => ({
-                  length: screenWidth * 0.85, // Adjusted width for smaller boxes
-                  offset: (screenWidth * 0.85) * index, // Adjusted offset
-                  index,
-                })}
+            <TextInput
+              style={styles.input}
+              placeholder="Brand (e.g., Hard Copy)"
+              placeholderTextColor={colors.textSecondary}
+              value={itemBrand}
+              onChangeText={setItemBrand}
+            />
+            <View style={styles.quantityUnitContainer}>
+              <TextInput
+                style={[styles.input, styles.quantityInput]}
+                placeholder="Quantity (e.g., 2)"
+                placeholderTextColor={colors.textSecondary}
+                value={itemQuantity}
+                onChangeText={setItemQuantity}
+                keyboardType="numeric"
               />
-
-              <TouchableOpacity
-                style={[styles.arrowButton, { right: 0 }]}
-                onPress={() => scrollRecommendation('next')}
-              >
-                <Ionicons name="chevron-forward-circle-outline" size={30} color="black" style={{ opacity: 0.5 }} />
-              </TouchableOpacity>
+              <TextInput
+                style={[styles.input, styles.unitInput]}
+                placeholder="Unit (e.g., ream, box)"
+                placeholderTextColor={colors.textSecondary}
+                value={itemUnit}
+                onChangeText={setItemUnit}
+              />
             </View>
-          </View>
-
-          <View style={styles.section}>
-            <View style={styles.rowBetween}>
-              <Text style={styles.sectionHeading}>My Purchases</Text>
-              <TouchableOpacity onPress={() => navigation.navigate('OrderHistory', { user })}>
-                <Text style={styles.link}>View Purchase History</Text>
-              </TouchableOpacity>
-            </View>
-
-            <View style={styles.purchaseRow}>
-              <TouchableOpacity
-                style={styles.purchaseItem}
-                onPress={() => navigation.navigate('ToPay', { user })}
-              >
-                <FontAwesome name="credit-card" size={20} color={colors.darkerGreen} /> {/* Smaller icon */}
-                <Text style={styles.purchaseItemText}>To Pay</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.purchaseItem}
-                onPress={() => navigation.navigate('ToConfirm', { user })}
-              >
-                <Ionicons name="checkmark-circle-outline" size={20} color={colors.darkerGreen} /> {/* Smaller icon */}
-                <Text style={styles.purchaseItemText}>To Confirm</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.purchaseItem}
-                onPress={() => navigation.navigate('ToReceive', { user })}
-              >
-                <Ionicons name="cube-outline" size={20} color={colors.darkerGreen} /> {/* Smaller icon */}
-                <Text style={styles.purchaseItemText}>To Receive</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.purchaseItem}
-                onPress={() => navigation.navigate('ToRate', { user })}
-              >
-                <Ionicons name="star-outline" size={20} color={colors.darkerGreen} /> {/* Smaller icon */}
-                <Text style={styles.purchaseItemText}>To Rate</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-
-          <View style={styles.section}>
-            <Text style={styles.sectionHeading}>Support</Text>
-            <TouchableOpacity style={styles.supportItem} onPress={() => navigation.navigate('HelpCenter')}>
-              <Ionicons name="help-circle-outline" size={18} color={colors.darkerGreen} /> {/* Smaller icon */}
-              <Text style={styles.supportText}>Help Center</Text>
+            <Text style={styles.inputLabel}>Order Category:</Text>
+            <TouchableOpacity
+              style={styles.categorySelectButton}
+              onPress={() => setIsCategoryModalVisible(true)}
+            >
+              <Text style={styles.categorySelectButtonText}>
+                {selectedOrderCategory ? categories.find(cat => cat.id === selectedOrderCategory)?.categoryName : 'Choose Category'}
+              </Text>
+              <Ionicons name="chevron-down" size={18} color={colors.textSecondary} />
             </TouchableOpacity>
-            <TouchableOpacity style={styles.supportItem} onPress={() => navigation.navigate('ChatBot', { user })}>
-              <Ionicons name="chatbubble-ellipses-outline" size={18} color={colors.darkerGreen} /> {/* Smaller icon */}
-              <Text style={styles.supportText}>Chat with Koncepto</Text>
-            </TouchableOpacity>
-          </View>
-          <View style={{ height: 20 }} />{/* Add some padding at the bottom of the scroll view */}
-        </ScrollView>
+            <TextInput
+              style={[styles.input, styles.notesInput]}
+              placeholder="Description (optional)"
+              placeholderTextColor={colors.textSecondary}
+              value={itemDescription}
+              onChangeText={setItemDescription}
+              multiline
+            />
 
-        {/* Modal for Profile Picture Options - Positioned at the bottom */}
-        <Modal animationType="slide" transparent={true} visible={modalVisible} onRequestClose={() => setModalVisible(false)}>
-          <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setModalVisible(false)}>
-            <View style={styles.modalView}> {/* This is the content box for profile pic options */}
-              {uploading ? (
-                <ActivityIndicator size="large" color={colors.primaryGreen} style={{ paddingVertical: 20 }} />
+            <TouchableOpacity style={styles.imagePickerButton} onPress={() => setImagePickerModalVisible(true)}>
+              {itemImage ? (
+                <Image source={{ uri: itemImage }} style={styles.selectedImagePreview} />
               ) : (
-                <>
-                  <TouchableOpacity onPress={pickImage} style={styles.modalButton}>
-                    <Ionicons name="image-outline" size={20} color={colors.textPrimary} style={{ marginRight: 10 }} />
-                    <Text style={styles.modalButtonText}>Edit Profile Picture</Text>
-                  </TouchableOpacity>
-                  {user.profilepic && user.profilepic !== 'null' && ( // Only show delete if there's a picture
-                    <TouchableOpacity onPress={handleDeletePicture} style={styles.modalButton}>
-                      <Ionicons name="trash-outline" size={20} color={colors.errorRed} style={{ marginRight: 10 }} />
-                      <Text style={[styles.modalButtonText, { color: colors.errorRed }]}>Delete Profile Picture</Text>
-                    </TouchableOpacity>
-                  )}
-                  <TouchableOpacity onPress={() => setModalVisible(false)} style={styles.modalButton}>
-                    <Ionicons name="close-circle-outline" size={20} color={colors.textPrimary} style={{ marginRight: 10 }} />
-                    <Text style={styles.modalButtonText}>Cancel</Text>
-                  </TouchableOpacity>
-                </>
-              )}
-            </View>
-          </TouchableOpacity>
-        </Modal>
-
-        {/* Settings Sidebar Modal */}
-        <Modal
-          animationType="none"
-          transparent={true}
-          visible={settingsVisible}
-          onRequestClose={closeSettings}
-        >
-          <TouchableOpacity
-            style={styles.settingsOverlay} // Using a dedicated overlay for settings sidebar
-            activeOpacity={1}
-            onPress={closeSettings}
-          >
-            <Animated.View style={[styles.settingsModal, { transform: [{ translateX: slideAnim }] }]}>
-              <SafeAreaView style={{ flex: 1, backgroundColor: colors.white }}>
-                <View style={styles.settingsHeader}>
-                  <Text style={styles.settingsTitle}>Settings</Text>
-                  <TouchableOpacity onPress={closeSettings}>
-                    <Ionicons name="close" size={28} color={colors.textPrimary} />
-                  </TouchableOpacity>
+                <View style={styles.imagePickerPlaceholder}>
+                  <Ionicons name="camera-outline" size={25} color={colors.textSecondary} />
+                  <Text style={styles.imagePickerText}>Add Photo (Optional)</Text>
                 </View>
-                <ScrollView contentContainerStyle={styles.settingsContent}>
-                  <TouchableOpacity style={styles.settingsOption} onPress={() => navigation.navigate('Profile', { user })}>
-                    <Ionicons name="person-outline" size={20} color={colors.textPrimary} style={styles.settingsOptionIcon} />
-                    <Text style={styles.settingsOptionText}>Profile</Text>
-                  </TouchableOpacity>
+              )}
+            </TouchableOpacity>
 
-                  <TouchableOpacity style={styles.settingsOption} onPress={openEditAccountModal}>
-                    <Ionicons name="settings-outline" size={20} color={colors.textPrimary} style={styles.settingsOptionIcon} />
-                    <Text style={styles.settingsOptionText}>Account Settings</Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity style={styles.settingsOption} onPress={() => navigation.navigate('MyReceipt', { user })}>
-                    <Ionicons name="document-text-outline" size={20} color={colors.textPrimary} style={styles.settingsOptionIcon} />
-                    <Text style={styles.settingsOptionText}>Receipt</Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity style={styles.settingsOption} onPress={() => navigation.navigate('HelpCenter')}>
-                    <Ionicons name="help-circle-outline" size={20} color={colors.textPrimary} style={styles.settingsOptionIcon} />
-                    <Text style={styles.settingsOptionText}>Help Center</Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity style={styles.settingsOption} onPress={() => navigation.navigate('AboutUs')}>
-                    <Ionicons name="information-circle-outline" size={20} color={colors.textPrimary} style={styles.settingsOptionIcon} />
-                    <Text style={styles.settingsOptionText}>About</Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={[styles.settingsOption, styles.logoutButton]}
-                    onPress={() => Alert.alert('Logout', 'Are you sure you want to log out?', [
-                      { text: 'Cancel', style: 'cancel' },
-                      { text: 'Yes', onPress: () => navigation.replace('Welcome') }
-                    ])}
-                  >
-                    <Ionicons name="log-out-outline" size={20} color={colors.errorRed} style={styles.settingsOptionIcon} />
-                    <Text style={[styles.settingsOptionText, { color: colors.errorRed }]}>Log Out</Text>
-                  </TouchableOpacity>
-                </ScrollView>
-              </SafeAreaView>
-            </Animated.View>
-          </TouchableOpacity>
-        </Modal>
-
-        {/* Current Password Verification Modal */}
-        <Modal
-          animationType="fade"
-          transparent={true}
-          visible={passwordVerificationModalVisible}
-          onRequestClose={() => setPasswordVerificationModalVisible(false)}
-        >
-          <KeyboardAvoidingView
-            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-            style={styles.centeredModalOverlay}
-          >
-            <View style={styles.passwordVerificationModalView}>
-              <Text style={styles.modalTitle}>Verify Current Password</Text>
-              <Text style={styles.modalDescription}>Please enter your current password to proceed with account changes.</Text>
-              <TextInput
-                style={styles.modalInput}
-                placeholder="Current Password"
-                secureTextEntry
-                value={currentPasswordInput}
-                onChangeText={setCurrentPasswordInput}
-                placeholderTextColor={colors.textSecondary}
-              />
-              <View style={styles.modalButtonContainer}>
-                <TouchableOpacity
-                  style={[styles.modalActionButton, { backgroundColor: colors.greyBorder }]}
-                  onPress={() => setPasswordVerificationModalVisible(false)}
-                >
-                  <Text style={styles.modalButtonText}>Cancel</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.modalActionButton}
-                  onPress={handleVerifyCurrentPassword}
-                >
-                  <Text style={styles.modalButtonText}>Verify</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </KeyboardAvoidingView>
-        </Modal>
-
-        {/* Edit Account Modal */}
-        <Modal
-          animationType="slide"
-          transparent={true}
-          visible={editAccountModalVisible}
-          onRequestClose={() => setEditAccountModalVisible(false)}
-        >
-          <KeyboardAvoidingView
-            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-            style={styles.centeredModalOverlay}
-          >
-            <View style={styles.editAccountModalView}>
-              <Text style={styles.modalTitle}>Edit Account Details</Text>
-              <Text style={styles.modalLabel}>Email</Text>
-              <TextInput
-                style={styles.modalInput}
-                placeholder="New Email"
-                keyboardType="email-address"
-                autoCapitalize="none"
-                value={newEmail}
-                onChangeText={setNewEmail}
-                placeholderTextColor={colors.textSecondary}
-              />
-              <Text style={styles.modalLabel}>New Password (leave blank if not changing)</Text>
-              <TextInput
-                style={styles.modalInput}
-                placeholder="New Password"
-                secureTextEntry
-                value={newPassword}
-                onChangeText={setNewPassword}
-                placeholderTextColor={colors.textSecondary}
-              />
-              <TextInput
-                style={styles.modalInput}
-                placeholder="Confirm New Password"
-                secureTextEntry
-                value={confirmNewPassword}
-                onChangeText={setConfirmNewPassword}
-                placeholderTextColor={colors.textSecondary}
-              />
-              <View style={styles.modalButtonContainer}>
-                <TouchableOpacity
-                  style={[styles.modalActionButton, { backgroundColor: colors.greyBorder }]}
-                  onPress={() => setEditAccountModalVisible(false)}
-                >
-                  <Text style={styles.modalButtonText}>Cancel</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.modalActionButton}
-                  onPress={handleSaveAccountOptions}
-                >
-                  <Text style={styles.modalButtonText}>Save Changes</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </KeyboardAvoidingView>
-        </Modal>
-
-        {/* Confirm Changes Modal */}
-        <Modal
-          animationType="fade"
-          transparent={true}
-          visible={confirmChangesModalVisible}
-          onRequestClose={() => setConfirmChangesModalVisible(false)}
-        >
-          <View style={styles.centeredModalOverlay}>
-            <View style={styles.confirmChangesModalView}>
-              <Text style={styles.modalTitle}>Confirm Changes</Text>
-              <Text style={styles.modalDescription}>Are you sure you want to apply these changes to your account?</Text>
-              <View style={styles.modalButtonContainer}>
-                <TouchableOpacity
-                  style={[styles.modalActionButton, { backgroundColor: colors.greyBorder }]}
-                  onPress={() => setConfirmChangesModalVisible(false)}
-                >
-                  <Text style={styles.modalButtonText}>Cancel</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.modalActionButton}
-                  onPress={confirmChanges}
-                >
-                  <Text style={styles.modalButtonText}>Confirm</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
+            <TouchableOpacity style={styles.addButton} onPress={addItemToOrder}>
+              <Ionicons name="add-circle" size={20} color={colors.white} style={styles.buttonIcon} />
+              <Text style={styles.buttonText}>Add Item</Text>
+            </TouchableOpacity>
           </View>
-        </Modal>
 
-        {/* Fixed Bottom Navigation */}
-        <View style={[styles.bottomNav, { paddingBottom: insets.bottom }]}>
-          <TouchableOpacity
-            onPress={() => navigation.navigate('ProductList', { user })}
-            style={styles.navButton}
-          >
-            <Ionicons name="home" size={24} color={isHomeActive ? colors.white : '#B0E0A0'} />
-            <Text style={[styles.navLabel, isHomeActive && styles.activeNavLabel]}>Home</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            onPress={() => navigation.navigate('Message', { user })}
-            style={styles.navButton}
-          >
-            <Ionicons name="chatbubble-ellipses" size={24} color={isChatActive ? colors.white : '#B0E0A0'} />
-            <Text style={[styles.navLabel, isChatActive && styles.activeNavLabel]}>Chat</Text>
-          </TouchableOpacity>
+          <Text style={styles.currentOrderTitle}>Your Order ({orderItems.length} items)</Text>
+          {orderItems.length === 0 ? (
+            <View style={styles.emptyOrderContainer}>
+              <Ionicons name="basket-outline" size={40} color={colors.greyBorder} />
+              <Text style={styles.emptyOrderText}>No items added yet.</Text>
+            </View>
+          ) : (
+            <FlatList
+              data={orderItems}
+              renderItem={renderOrderItem}
+              keyExtractor={item => item.id}
+              scrollEnabled={false}
+              contentContainerStyle={styles.orderList}
+            />
+          )}
 
           <TouchableOpacity
-            onPress={() => navigation.navigate('Carts', { user })}
-            style={styles.navButton}
+            style={[styles.submitButton, isSubmitting && styles.submitButtonDisabled]}
+            onPress={submitOrder}
+            disabled={isSubmitting}
           >
-            <Ionicons name="cart" size={24} color={isCartActive ? colors.white : '#B0E0A0'} />
-            <Text style={[styles.navLabel, isCartActive && styles.activeNavLabel]}>Cart</Text>
+            {isSubmitting ? (
+              <ActivityIndicator color={colors.white} />
+            ) : (
+              <>
+                <Ionicons name="checkmark-circle" size={20} color={colors.white} style={styles.buttonIcon} />
+                <Text style={styles.buttonText}>Submit Order</Text>
+              </>
+            )}
           </TouchableOpacity>
-
-          <TouchableOpacity
-            onPress={() => navigation.navigate('Profile', { user })}
-            style={styles.navButton}
-          >
-            <Ionicons name="person" size={24} color={isAccountActive ? colors.white : '#B0E0A0'} />
-            <Text style={[styles.navLabel, isAccountActive && styles.activeNavLabel]}>Account</Text>
-          </TouchableOpacity>
-        </View>
+        </ScrollView>
       </KeyboardAvoidingView>
+
+      <Modal
+        animationType="fade"
+        transparent={true}
+        visible={isImagePickerModalVisible}
+        onRequestClose={() => setImagePickerModalVisible(false)}
+      >
+        <Pressable style={styles.centeredView} onPress={() => setImagePickerModalVisible(false)}>
+          <View style={styles.imagePickerModalView} onStartShouldSetResponder={() => true}>
+            <Text style={styles.modalTitle}>Choose Source</Text>
+            <TouchableOpacity style={styles.modalOptionButton} onPress={() => pickImage('camera')}>
+              <Ionicons name="camera" size={22} color={colors.primaryGreen} />
+              <Text style={styles.modalOptionText}>Take Photo</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.modalOptionButton} onPress={() => pickImage('library')}>
+              <Ionicons name="image" size={22} color={colors.primaryGreen} />
+              <Text style={styles.modalOptionText}>Choose from Gallery</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.modalOptionButton, styles.modalCancelButton]}
+              onPress={() => setImagePickerModalVisible(false)}
+            >
+              <Text style={styles.modalCancelButtonText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </Pressable>
+      </Modal>
+
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={isCategoryModalVisible}
+        onRequestClose={() => setIsCategoryModalVisible(false)}
+      >
+        <Pressable style={styles.centeredView} onPress={() => setIsCategoryModalVisible(false)}>
+          <View style={styles.categoryModalView} onStartShouldSetResponder={() => true}>
+            <Text style={styles.modalTitle}>Select Category</Text>
+            <FlatList
+              data={categories}
+              keyExtractor={(item) => item.id.toString()}
+              renderItem={({ item }) => (
+                <TouchableOpacity
+                  style={styles.categoryOptionButton}
+                  onPress={() => {
+                    setSelectedOrderCategory(item.id);
+                    setIsCategoryModalVisible(false);
+                  }}
+                >
+                  <Text style={[
+                    styles.categoryOptionText,
+                    selectedOrderCategory === item.id && styles.selectedCategoryOptionText
+                  ]}>
+                    {item.categoryName}
+                  </Text>
+                </TouchableOpacity>
+              )}
+              ListEmptyComponent={() => (
+                <Text style={styles.emptyCategoryText}>No categories available.</Text>
+              )}
+            />
+            <TouchableOpacity
+              style={styles.modalActionButton}
+              onPress={() => setIsCategoryModalVisible(false)}
+            >
+              <Text style={styles.modalActionButtonText}>Close</Text>
+            </TouchableOpacity>
+          </View>
+        </Pressable>
+      </Modal>
+
+      <Modal
+        animationType="fade"
+        transparent={true}
+        visible={successModalVisible}
+        onRequestClose={() => setSuccessModalVisible(false)}
+      >
+        <Pressable style={styles.centeredView} onPress={() => setSuccessModalVisible(false)}>
+          <View style={styles.modalView}>
+            <Ionicons name="checkmark-circle" size={50} color={colors.primaryGreen} />
+            <Text style={styles.modalTitle}>Order Success!</Text>
+            <Text style={styles.modalText}>
+              Your custom order has been successfully placed.{' '}
+              <Text
+                style={styles.viewOrderLink}
+                onPress={() => {
+                  setSuccessModalVisible(false);
+                  if (submittedOrderId) {
+                    navigation.navigate('ViewCustomOrder', { customOrderId: submittedOrderId, user });
+                  }
+                }}
+              >
+                Click here to view
+              </Text>
+            </Text>
+            <TouchableOpacity
+              style={styles.modalActionButton}
+              onPress={() => {
+                setSuccessModalVisible(false);
+                navigation.navigate('ProductList', { user });
+              }}
+            >
+              <Text style={styles.modalActionButtonText}>OK</Text>
+            </TouchableOpacity>
+          </View>
+        </Pressable>
+      </Modal>
+
+      <Modal
+        animationType="fade"
+        transparent={true}
+        visible={errorModalVisible}
+        onRequestClose={() => setErrorModalVisible(false)}
+      >
+        <Pressable style={styles.centeredView} onPress={() => setErrorModalVisible(false)}>
+          <View style={styles.modalView}>
+            <Ionicons name="alert-circle" size={50} color={colors.errorRed} />
+            <Text style={styles.modalTitle}>Error</Text>
+            <Text style={styles.modalText}>{errorMessage}</Text>
+            <TouchableOpacity
+              style={[styles.modalActionButton, styles.modalCancelActionButton]}
+              onPress={() => setErrorModalVisible(false)}
+            >
+              <Text style={styles.modalCancelActionButtonText}>Close</Text>
+            </TouchableOpacity>
+          </View>
+        </Pressable>
+      </Modal>
     </SafeAreaView>
   );
-}
+};
 
 const styles = StyleSheet.create({
-  container: {
+  safeArea: {
     flex: 1,
     backgroundColor: colors.lightGreyBackground,
   },
-  scrollableContent: {
-    flex: 1,
-    backgroundColor: colors.lightGreyBackground,
-  },
-  loaderContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: colors.lightGreyBackground,
-  },
-  loaderText: {
-    marginTop: 10,
-    fontSize: 16,
-    color: colors.textPrimary,
-  },
-  header: {
+  headerContainer: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: colors.primaryGreen,
+    paddingVertical: 12,
     paddingHorizontal: 16,
-    paddingBottom: 15, // Made smaller
-    borderBottomLeftRadius: 20,
-    borderBottomRightRadius: 20,
+    borderBottomLeftRadius: 15,
+    borderBottomRightRadius: 15,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
+    shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.2,
-    shadowRadius: 5,
-    elevation: 5,
-  },
-  profileIcon: {
-    marginRight: 15,
-  },
-  profileImage: {
-    width: 60, // Made smaller
-    height: 60, // Made smaller
-    borderRadius: 30, // Adjusted for new size
-    borderWidth: 2, // Slightly smaller border
-    borderColor: colors.white,
-    backgroundColor: colors.lightGreen,
-  },
-  name: {
-    color: colors.white,
-    fontSize: 18, // Made smaller
-    fontWeight: 'bold',
-  },
-  school: {
-    color: colors.white,
-    fontSize: 12, // Made smaller
-    marginTop: 1,
-    opacity: 0.9,
-  },
-  email: {
-    color: colors.white,
-    fontSize: 11, // Made smaller
-    marginTop: 1,
-    opacity: 0.8,
-  },
-  headerIconsContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginLeft: 'auto',
-  },
-  coinIcon: {
-    padding: 6, // Made smaller
-    marginRight: 8, // Made smaller
-  },
-  settingsIcon: {
-    padding: 6, // Made smaller
-  },
-  viewOrderRequestButton: {
-    backgroundColor: colors.accentGreen,
-    paddingVertical: 8, // Made smaller
-    marginHorizontal: 10,
-    marginTop: 10,
-    borderRadius: 8, // Slightly smaller border radius
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
     shadowRadius: 3,
-    elevation: 3,
+    elevation: 4,
   },
-  viewOrderRequestButtonText: {
-    color: colors.white,
-    fontSize: 14, // Made smaller
-    fontWeight: 'bold',
-  },
-  section: {
-    backgroundColor: colors.white,
-    marginHorizontal: 10,
-    marginTop: 10,
-    borderRadius: 8,
-    padding: 15,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
-  },
-  sectionHeading: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: colors.textPrimary,
-    marginBottom: 8,
-  },
-  description: {
-    fontSize: 12,
-    color: colors.textSecondary,
-    marginBottom: 10,
-    textAlign: 'center',
-  },
-  recommendationsWrapper: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    height: 220, // Reduced height
-    position: 'relative',
-    overflow: 'hidden',
-  },
-  recommendationsFlatListContainer: {
-    alignItems: 'center',
-  },
-  recommendBoxContainer: {
-    width: screenWidth * 0.85, // Adjusted width for smaller boxes
-    marginHorizontal: 5, // Smaller horizontal margin
-    alignItems: 'center',
-  },
-  recommendBox: {
-    backgroundColor: colors.lightGreen,
-    borderRadius: 8, // Smaller border radius
-    padding: 10, // Reduced padding
-    width: '100%',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 3,
-  },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 2, // Smaller margin
-  },
-  recommendText: {
-    fontSize: 11, // Smaller font size
-    color: colors.textSecondary,
-    marginLeft: 3, // Smaller margin
-    flexShrink: 1,
-  },
-  itemRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 5, // Smaller padding
-    borderBottomWidth: 1,
-    borderBottomColor: colors.greyBorder,
-  },
-  itemImage: {
-    width: 35, // Smaller image
-    height: 35, // Smaller image
-    borderRadius: 5,
-    marginHorizontal: 8, // Smaller margin
-    backgroundColor: colors.white,
-  },
-  itemText: {
-    flex: 1,
-    fontSize: 12, // Smaller font size
-    color: colors.textPrimary,
-  },
-  buttonRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    marginTop: 10, // Smaller margin
-  },
-  cartButton: {
-    backgroundColor: colors.greyBorder,
-    paddingVertical: 6, // Smaller padding
-    paddingHorizontal: 12, // Smaller padding
-    borderRadius: 18, // Adjusted border radius
-  },
-  cartButtonActive: {
-    backgroundColor: colors.primaryGreen,
-  },
-  buyButton: {
-    backgroundColor: colors.darkerGreen,
-    paddingVertical: 6, // Smaller padding
-    paddingHorizontal: 12, // Smaller padding
-    borderRadius: 18, // Adjusted border radius
-  },
-  buttonText: {
-    color: colors.white,
-    fontWeight: 'bold',
-    fontSize: 11, // Smaller font size
-  },
-  cartButtonTextActive: {
-    color: colors.white,
-  },
-  arrowButton: {
+  backButton: {
     position: 'absolute',
-    top: '50%',
-    transform: [{ translateY: -15 }],
-    zIndex: 1,
+    left: 16,
     padding: 5,
   },
-  rowBetween: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  link: {
-    color: colors.primaryGreen,
-    fontSize: 12,
-    fontWeight: 'bold',
-  },
-  purchaseRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    marginTop: 10,
-  },
-  purchaseItem: {
-    alignItems: 'center',
-    padding: 5,
-    flex: 1,
-  },
-  purchaseItemText: {
-    fontSize: 10, // Made smaller
-    color: colors.textPrimary,
-    marginTop: 5,
-    textAlign: 'center',
-  },
-  supportItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 8, // Made smaller
-    borderBottomWidth: 1,
-    borderBottomColor: colors.greyBorder,
-  },
-  supportText: {
-    marginLeft: 10,
-    fontSize: 13, // Made smaller
-    color: colors.textPrimary,
-  },
-
-  // MODIFIED Modal Styles (for profile picture options - now at bottom)
-  modalOverlay: {
-    flex: 1,
-    justifyContent: 'flex-end', // Aligns modal content to the bottom
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-  },
-  modalView: {
-    backgroundColor: colors.white,
-    width: '100%',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    padding: 20,
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    elevation: 5,
-    paddingBottom: Platform.OS === 'ios' ? 30 : 20,
-  },
-  modalButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    width: '100%',
-    paddingVertical: 12, // Made smaller
-    borderBottomWidth: 1,
-    borderBottomColor: colors.greyBorder,
-    justifyContent: 'flex-start',
-  },
-  modalButtonText: {
-    fontSize: 15, // Made smaller
-    color: colors.textPrimary,
-    fontWeight: '500',
-  },
-
-  // Settings Sidebar Modal Styles
-  settingsOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'flex-start',
-    alignItems: 'flex-end',
-  },
-  settingsModal: {
-    width: screenWidth * 0.75,
-    height: '100%',
-    backgroundColor: colors.white,
-    shadowColor: '#000',
-    shadowOffset: { width: -5, height: 0 },
-    shadowOpacity: 0.2,
-    shadowRadius: 5,
-    elevation: 10,
-  },
-  settingsHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 15,
-    paddingVertical: 15,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.greyBorder,
-    backgroundColor: colors.primaryGreen,
-    paddingTop: Platform.OS === 'android' ? 30 : 50,
-  },
-  settingsTitle: {
+  headerTitle: {
     fontSize: 20,
     fontWeight: 'bold',
     color: colors.white,
   },
-  settingsContent: {
-    padding: 20,
-    paddingBottom: 50,
+  keyboardAvoidingView: {
+    flex: 1,
   },
-  settingsSectionTitle: {
-    fontSize: 16,
+  scrollViewContent: {
+    flexGrow: 1,
+    padding: 12,
+    paddingBottom: 80,
+  },
+  header: {
+    fontSize: 22,
     fontWeight: 'bold',
-    color: colors.primaryGreen,
-    marginTop: 20,
-    marginBottom: 10,
+    color: colors.textPrimary,
+    marginBottom: 8,
+    textAlign: 'center',
   },
-  settingsOption: {
+  user_IdText: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    marginBottom: 15,
+  },
+  formContainer: {
+    backgroundColor: colors.white,
+    borderRadius: 12,
+    padding: 15,
+    marginBottom: 15,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  formTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: colors.textPrimary,
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  inputLabel: {
+    fontSize: 14,
+    color: colors.textPrimary,
+    marginBottom: 6,
+    fontWeight: '500',
+  },
+  input: {
+    borderWidth: 1,
+    borderColor: colors.greyBorder,
+    borderRadius: 8,
+    padding: 10,
+    marginBottom: 12,
+    fontSize: 14,
+    color: colors.textPrimary,
+    backgroundColor: colors.white,
+  },
+  quantityUnitContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  quantityInput: {
+    flex: 1,
+    marginRight: 8,
+  },
+  unitInput: {
+    flex: 1,
+  },
+  notesInput: {
+    minHeight: 60,
+    textAlignVertical: 'top',
+  },
+  imagePickerButton: {
+    backgroundColor: colors.lightGreen,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.greyBorder,
+    justifyContent: 'center',
+    alignItems: 'center',
+    height: 100,
+    marginBottom: 12,
+    overflow: 'hidden',
+  },
+  imagePickerPlaceholder: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  selectedImagePreview: {
+    width: '100%',
+    height: '100%',
+    resizeMode: 'cover',
+    borderRadius: 8,
+  },
+  imagePickerText: {
+    color: colors.textSecondary,
+    marginTop: 4,
+    fontSize: 12,
+  },
+  checkboxContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 10, // Made smaller
-    borderBottomWidth: 1,
-    borderBottomColor: colors.greyBorder,
+    marginBottom: 12,
   },
-  settingsOptionIcon: {
-    marginRight: 8, // Made smaller
+  checkbox: {
+    marginRight: 8,
+    width: 18,
+    height: 18,
+    borderRadius: 4,
   },
-  settingsOptionText: {
-    fontSize: 14, // Made smaller
+  checkboxLabel: {
+    fontSize: 14,
     color: colors.textPrimary,
   },
-  logoutButton: {
-    marginTop: 30,
-    borderBottomWidth: 0,
+  addButton: {
+    backgroundColor: colors.primaryGreen,
+    paddingVertical: 10,
+    borderRadius: 8,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+    elevation: 3,
   },
-
-  // Modals for Account Editing (re-used general modal styles)
-  centeredModalOverlay: {
+  buttonText: {
+    color: colors.white,
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginLeft: 6,
+  },
+  buttonIcon: {
+    marginRight: 4,
+  },
+  currentOrderTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: colors.textPrimary,
+    marginTop: 15,
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  emptyOrderContainer: {
+    backgroundColor: colors.white,
+    borderRadius: 12,
+    padding: 15,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 120,
+    borderWidth: 1,
+    borderColor: colors.greyBorder,
+    borderStyle: 'dashed',
+  },
+  emptyOrderText: {
+    color: colors.textSecondary,
+    fontSize: 14,
+    textAlign: 'center',
+    marginTop: 8,
+  },
+  orderList: {},
+  orderItemCard: {
+    flexDirection: 'row',
+    backgroundColor: colors.white,
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 8,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 1,
+    elevation: 1,
+  },
+  orderItemImage: {
+    width: 50,
+    height: 50,
+    borderRadius: 6,
+    marginRight: 12,
+    backgroundColor: colors.lightGreen,
+  },
+  orderItemDetails: {
+    flex: 1,
+  },
+  orderItemName: {
+    fontSize: 15,
+    fontWeight: 'bold',
+    color: colors.textPrimary,
+  },
+  orderItemBrand: {
+    fontSize: 13,
+    color: colors.textSecondary,
+    marginTop: 1,
+  },
+  orderItemQuantity: {
+    fontSize: 13,
+    color: colors.textSecondary,
+    marginTop: 1,
+  },
+  orderItemNotes: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    fontStyle: 'italic',
+    marginTop: 1,
+  },
+  orderItemGathered: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    marginTop: 1,
+  },
+  removeButton: {
+    padding: 3,
+  },
+  submitButton: {
+    backgroundColor: colors.darkerGreen,
+    paddingVertical: 12,
+    borderRadius: 12,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 15,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  submitButtonDisabled: {
+    backgroundColor: colors.greyBorder,
+  },
+  centeredView: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    padding: 20,
+    backgroundColor: 'rgba(0,0,0,0.6)',
   },
-  passwordVerificationModalView: {
-    width: '100%',
+  modalView: {
+    margin: 15,
     backgroundColor: colors.white,
-    borderRadius: 10,
-    padding: 20,
+    borderRadius: 15,
+    padding: 25,
     alignItems: 'center',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25,
     shadowRadius: 4,
     elevation: 5,
-  },
-  editAccountModalView: {
-    width: '100%',
-    backgroundColor: colors.white,
-    borderRadius: 10,
-    padding: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    elevation: 5,
-  },
-  confirmChangesModalView: {
-    width: '100%',
-    backgroundColor: colors.white,
-    borderRadius: 10,
-    padding: 20,
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    elevation: 5,
+    width: '85%',
+    maxWidth: 350,
   },
   modalTitle: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: 'bold',
-    color: colors.primaryGreen,
-    marginBottom: 10,
+    marginBottom: 12,
     textAlign: 'center',
+    color: colors.textPrimary,
   },
-  modalDescription: {
+  modalText: {
+    marginBottom: 15,
+    textAlign: 'center',
     fontSize: 14,
     color: colors.textSecondary,
-    marginBottom: 20,
-    textAlign: 'center',
-  },
-  modalLabel: {
-    alignSelf: 'flex-start',
-    fontSize: 14,
-    color: colors.textPrimary,
-    marginBottom: 5,
-    marginTop: 10,
-    fontWeight: '500',
-  },
-  modalInput: {
-    width: '100%',
-    padding: 10,
-    borderWidth: 1,
-    borderColor: colors.greyBorder,
-    borderRadius: 5,
-    marginBottom: 10,
-    fontSize: 15,
-    color: colors.textPrimary,
+    lineHeight: 20,
   },
   modalButtonContainer: {
     flexDirection: 'row',
     justifyContent: 'space-around',
     width: '100%',
-    marginTop: 20,
+    marginTop: 15,
   },
   modalActionButton: {
     backgroundColor: colors.primaryGreen,
     paddingVertical: 10,
     paddingHorizontal: 20,
-    borderRadius: 25,
+    borderRadius: 20,
     minWidth: 100,
     alignItems: 'center',
+    marginTop: 8,
   },
   modalActionButtonText: {
     color: colors.white,
     fontWeight: 'bold',
-    fontSize: 16,
+    fontSize: 14,
   },
   modalCancelActionButton: {
     backgroundColor: colors.greyBorder,
@@ -1517,38 +824,100 @@ const styles = StyleSheet.create({
   modalCancelActionButtonText: {
     color: colors.textPrimary,
   },
-
-  // Bottom Navigation
-  bottomNav: {
-    backgroundColor: colors.darkerGreen,
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    paddingVertical: 10,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -3 },
-    shadowOpacity: 0.2,
-    shadowRadius: 5,
-    elevation: 8,
-    position: 'absolute',
-    bottom: 0,
-    width: '100%',
-  },
-  navButton: {
+  imagePickerModalView: {
+    margin: 15,
+    backgroundColor: colors.white,
+    borderRadius: 15,
+    padding: 20,
     alignItems: 'center',
-    paddingVertical: 5,
-    paddingHorizontal: 10,
-    borderRadius: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
+    width: '75%',
+    maxWidth: 280,
   },
-  navLabel: {
-    color: '#B0E0A0',
-    fontSize: 12,
-    marginTop: 2,
-    fontWeight: '500',
+  modalOptionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    width: '100%',
+    justifyContent: 'center',
+    borderBottomWidth: 1,
+    borderBottomColor: colors.greyBorder,
   },
-  activeNavLabel: {
-    color: colors.white,
+  modalOptionText: {
+    fontSize: 16,
+    color: colors.textPrimary,
+    marginLeft: 8,
+  },
+  modalCancelButton: {
+    borderBottomWidth: 0,
+    marginTop: 8,
+  },
+  modalCancelButtonText: {
+    fontSize: 16,
+    color: colors.errorRed,
     fontWeight: 'bold',
   },
+  categoryModalView: {
+    margin: 15,
+    backgroundColor: colors.white,
+    borderRadius: 15,
+    padding: 20,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
+    width: '85%',
+    maxHeight: '60%',
+  },
+  categoryOptionButton: {
+    paddingVertical: 12,
+    paddingHorizontal: 15,
+    width: '100%',
+    borderBottomWidth: 1,
+    borderBottomColor: colors.greyBorder,
+  },
+  categoryOptionText: {
+    fontSize: 16,
+    color: colors.textPrimary,
+    textAlign: 'center',
+  },
+  selectedCategoryOptionText: {
+    fontWeight: 'bold',
+    color: colors.primaryGreen,
+  },
+  emptyCategoryText: {
+    fontSize: 14,
+    color: colors.textSecondary,
+    padding: 15,
+    textAlign: 'center',
+  },
+  categorySelectButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderWidth: 1,
+    borderColor: colors.greyBorder,
+    borderRadius: 8,
+    padding: 10,
+    marginBottom: 12,
+    backgroundColor: colors.white,
+  },
+  categorySelectButtonText: {
+    fontSize: 14,
+    color: colors.textPrimary,
+    flex: 1,
+  },
+  viewOrderLink: {
+    color: colors.primaryGreen,
+    fontWeight: 'bold',
+    textDecorationLine: 'underline',
+  },
 });
+
+export default CustomOrder;

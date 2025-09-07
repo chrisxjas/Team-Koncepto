@@ -1,39 +1,39 @@
 <?php
-// get_account_options.php
+header('Content-Type: application/json');
+header("Access-Control-Allow-Origin: *");
+header("Access-Control-Allow-Methods: GET");
+header("Access-Control-Allow-Headers: Content-Type");
 
-header('Content-Type: application/json'); // Set header to return JSON response
-include 'db_connect.php'; // Include your database connection file
+// Include centralized DB connection
+include __DIR__ . '/db_connection.php';
 
-$response = array(); // Initialize response array
+$response = array();
 
-// Check if user_id is provided in the GET request
+// Check if user_id is provided
 if (isset($_GET['user_id'])) {
-    $userId = $_GET['user_id'];
+    $userId = intval($_GET['user_id']);
 
-    // Prepare a SQL statement to prevent SQL injection
-    // Select only the email for display
     $stmt = $conn->prepare("SELECT email FROM users WHERE id = ?");
-    // 'i' denotes integer type for user_id
     $stmt->bind_param("i", $userId);
     $stmt->execute();
-    $result = $stmt->get_result(); // Get the result set
+    $result = $stmt->get_result();
 
-    // Check if a user with the given ID was found
-    if ($result->num_rows > 0) {
-        $user = $result->fetch_assoc(); // Fetch the user data
+    if ($result && $result->num_rows > 0) {
+        $user = $result->fetch_assoc();
         $response['success'] = true;
-        $response['email'] = $user['email']; // Add email to the response
+        $response['email'] = $user['email'];
         $response['message'] = "Account options fetched successfully.";
     } else {
         $response['success'] = false;
         $response['message'] = "User not found.";
     }
-    $stmt->close(); // Close the prepared statement
+
+    $stmt->close();
 } else {
     $response['success'] = false;
     $response['message'] = "User ID not provided.";
 }
 
-$conn->close(); // Close the database connection
-echo json_encode($response); // Encode and output the JSON response
+$conn->close();
+echo json_encode($response);
 ?>

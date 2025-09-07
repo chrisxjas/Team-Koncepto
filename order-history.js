@@ -10,6 +10,7 @@ import {
   TextInput,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { BASE_URL } from './config';
 
 export default function OrderHistory({ route, navigation }) {
   const { user } = route.params;
@@ -19,21 +20,21 @@ export default function OrderHistory({ route, navigation }) {
   const [searchQuery, setSearchQuery] = useState('');
 
   const fetchOrderHistory = async () => {
-    try {
-      const response = await fetch(`http://192.168.250.53/koncepto-app/api/order-history.php?user_id=${user.id}`);
-      const resJson = await response.json();
-      if (resJson.success && resJson.orders) {
-        setOrders(resJson.orders);
-      } else {
-        setOrders([]);
-      }
-    } catch (err) {
-      console.log('Error fetching orders:', err);
+  try {
+    const response = await fetch(`${BASE_URL}/order-history.php?user_id=${user.id}`);
+    const resJson = await response.json();
+    if (resJson.success && resJson.orders) {
+      setOrders(resJson.orders);
+    } else {
       setOrders([]);
-    } finally {
-      setLoading(false);
     }
-  };
+  } catch (err) {
+    console.log('Error fetching orders:', err);
+    setOrders([]);
+  } finally {
+    setLoading(false);
+  }
+};
 
   useEffect(() => {
     fetchOrderHistory();
@@ -83,7 +84,7 @@ export default function OrderHistory({ route, navigation }) {
           filteredOrders.map((order, index) => (
             <View key={index} style={styles.orderCard}>
               <Image
-                source={{ uri: `http://192.168.250.53/koncepto-app/assets/${order.image}` }}
+                source={{ uri: `${BASE_URL.replace('/api', '')}/assets/${order.image}` }}
                 style={styles.productImage}
               />
               <View style={styles.detailsContainer}>
@@ -174,7 +175,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#4CAF50',
-    paddingVertical: 12,
+    paddingVertical: 14,
     paddingHorizontal: 16,
     justifyContent: 'space-between',
   },

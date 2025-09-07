@@ -33,7 +33,7 @@ const colors = {
 };
 
 // Define the API base URL (ensure this matches your actual backend)
-const API_BASE_URL = 'http://192.168.250.53/koncepto-app/'; // Using the base URL from profile.js
+import { BASE_URL } from './config';
 
 export default function AccountOptions({ route }) {
   const navigation = useNavigation();
@@ -63,7 +63,7 @@ export default function AccountOptions({ route }) {
     }
     try {
       // Fetch user data to get the latest email
-      const response = await fetch(`${API_BASE_URL}api/get-user.php?id=${user.id}`);
+      const response = await fetch(`${API_BASE_URL}/get-user.php?id=${user.id}`);
       const resJson = await response.json();
       if (resJson.success && resJson.user) {
         setProfile(resJson.user); // Store the full user object as profile

@@ -1,45 +1,42 @@
 <?php
 header("Content-Type: application/json");
+header("Access-Control-Allow-Origin: *");
+header("Access-Control-Allow-Methods: POST");
+header("Access-Control-Allow-Headers: Content-Type");
+
 ini_set('display_errors', 1);
 error_reporting(E_ALL);
 
-$servername = "localhost";
-$username = "root";
-$password = "";
-$database = "koncepto1";
-
-$conn = new mysqli($servername, $username, $password, $database);
-if ($conn->connect_error) {
-    die(json_encode(["success" => false, "message" => "Connection failed: " . $conn->connect_error]));
-}
+include __DIR__ . '/db_connection.php'; // ✅ separate DB connection
 
 $response = [];
 
 try {
+    $data = $_POST;
+
     if (
-        !isset($_POST['user_id']) ||
-        !isset($_POST['school_id']) ||
-        !isset($_POST['order_date']) ||
-        !isset($_POST['ship_date']) ||
-        !isset($_POST['payment_method']) ||
-        !isset($_POST['total_price'])
+        !isset($data['user_id']) ||
+        !isset($data['school_id']) ||
+        !isset($data['order_date']) ||
+        !isset($data['ship_date']) ||
+        !isset($data['payment_method']) ||
+        !isset($data['total_price'])
     ) {
         throw new Exception('Missing required fields.');
     }
 
-    $userId = $_POST['user_id'];
-    $schoolId = $_POST['school_id'];
-    $orderDate = $_POST['order_date'];
-    $shipDate = $_POST['ship_date'];
-    $paymentMethod = $_POST['payment_method'];
-    $totalPrice = $_POST['total_price'];
+    $userId = $data['user_id'];
+    $schoolId = $data['school_id'];
+    $orderDate = $data['order_date'];
+    $shipDate = $data['ship_date'];
+    $paymentMethod = $data['payment_method'];
+    $totalPrice = $data['total_price'];
     $status = ($paymentMethod === 'GCash') ? 'to confirm' : 'to pay';
-
-    $selectedItems = isset($_POST['items']) ? json_decode($_POST['items'], true) : [];
+    $selectedItems = isset($data['items']) ? json_decode($data['items'], true) : [];
 
     $conn->begin_transaction();
 
-    // Insert Order
+    // 1️⃣ Insert Order
     $orderSql = "INSERT INTO orders (user_id, school_id, Orderdate, Shipdate, status, created_at, updated_at)
                  VALUES (?, ?, ?, ?, ?, NOW(), NOW())";
     $orderStmt = $conn->prepare($orderSql);
@@ -47,114 +44,60 @@ try {
     $orderStmt->execute();
     $orderId = $orderStmt->insert_id;
 
+    // 2️⃣ Insert Order Details
     if (!empty($selectedItems)) {
         foreach ($selectedItems as $item) {
-            $productId = $item['product_id'];
-            $quantity = $item['quantity'];
-            $price = $item['price'];
-
-            $detailSql = "INSERT INTO order_detail (order_id, product_id, quantity, price, created_at, updated_at)
+            $detailSql = "INSERT INTO order_details (order_id, product_id, quantity, price, created_at, updated_at)
                           VALUES (?, ?, ?, ?, NOW(), NOW())";
             $detailStmt = $conn->prepare($detailSql);
-            $detailStmt->bind_param("iiid", $orderId, $productId, $quantity, $price);
+            $detailStmt->bind_param(
+                "iiid",
+                $orderId,
+                $item['product_id'],
+                $item['quantity'],
+                $item['price']
+            );
             $detailStmt->execute();
         }
-
-        // Remove items from cart_items
-        $cartSql = "SELECT id FROM carts WHERE user_id = ?";
-        $cartStmt = $conn->prepare($cartSql);
-        $cartStmt->bind_param("i", $userId);
-        $cartStmt->execute();
-        $cartResult = $cartStmt->get_result();
-        $cartRow = $cartResult->fetch_assoc();
-        $cartId = $cartRow ? $cartRow['id'] : null;
-
-        if ($cartId) {
-            foreach ($selectedItems as $item) {
-                $productId = $item['product_id'];
-                $deleteItemSql = "DELETE FROM cart_items WHERE cart_id = ? AND product_id = ?";
-                $deleteItemStmt = $conn->prepare($deleteItemSql);
-                $deleteItemStmt->bind_param("ii", $cartId, $productId);
-                $deleteItemStmt->execute();
-            }
-
-            // Delete cart if empty
-            $checkEmptySql = "SELECT 1 FROM cart_items WHERE cart_id = ?";
-            $checkEmptyStmt = $conn->prepare($checkEmptySql);
-            $checkEmptyStmt->bind_param("i", $cartId);
-            $checkEmptyStmt->execute();
-            $checkEmptyResult = $checkEmptyStmt->get_result();
-            if ($checkEmptyResult->num_rows === 0) {
-                $deleteCartSql = "DELETE FROM carts WHERE id = ?";
-                $deleteCartStmt = $conn->prepare($deleteCartSql);
-                $deleteCartStmt->bind_param("i", $cartId);
-                $deleteCartStmt->execute();
-            }
-        }
-    } else {
-        // Fallback: Process Whole Cart
-        $cartSql = "SELECT id FROM carts WHERE user_id = ?";
-        $cartStmt = $conn->prepare($cartSql);
-        $cartStmt->bind_param("i", $userId);
-        $cartStmt->execute();
-        $cartResult = $cartStmt->get_result();
-        $cartRow = $cartResult->fetch_assoc();
-        if (!$cartRow) {
-            throw new Exception('Cart not found.');
-        }
-        $cartId = $cartRow['id'];
-
-        $itemSql = "SELECT product_id, quantity FROM cart_items WHERE cart_id = ?";
-        $itemStmt = $conn->prepare($itemSql);
-        $itemStmt->bind_param("i", $cartId);
-        $itemStmt->execute();
-        $itemResult = $itemStmt->get_result();
-        $items = $itemResult->fetch_all(MYSQLI_ASSOC);
-
-        if (empty($items)) {
-            throw new Exception('Cart is empty.');
-        }
-
-        foreach ($items as $item) {
-            $productId = $item['product_id'];
-            $quantity = $item['quantity'];
-
-            $priceStmt = $conn->prepare("SELECT price FROM products WHERE id = ?");
-            $priceStmt->bind_param("i", $productId);
-            $priceStmt->execute();
-            $priceResult = $priceStmt->get_result();
-            $priceRow = $priceResult->fetch_assoc();
-            $price = $priceRow ? $priceRow['price'] : 0;
-
-            $detailSql = "INSERT INTO order_detail (order_id, product_id, quantity, price, created_at, updated_at)
-                          VALUES (?, ?, ?, ?, NOW(), NOW())";
-            $detailStmt = $conn->prepare($detailSql);
-            $detailStmt->bind_param("iiid", $orderId, $productId, $quantity, $price);
-            $detailStmt->execute();
-        }
-
-        $deleteCartItemsSql = "DELETE FROM cart_items WHERE cart_id = ?";
-        $deleteCartItemsStmt = $conn->prepare($deleteCartItemsSql);
-        $deleteCartItemsStmt->bind_param("i", $cartId);
-        $deleteCartItemsStmt->execute();
-
-        $cleanCartSql = "DELETE FROM carts WHERE id = ? AND NOT EXISTS (
-                            SELECT 1 FROM cart_items WHERE cart_items.cart_id = carts.id
-                        )";
-        $cleanCartStmt = $conn->prepare($cleanCartSql);
-        $cleanCartStmt->bind_param("i", $cartId);
-        $cleanCartStmt->execute();
     }
 
-    // GCash payment proof
+    // 3️⃣ Handle Cart Cleanup (optional)
+    $cartSql = "SELECT id FROM carts WHERE user_id = ?";
+    $cartStmt = $conn->prepare($cartSql);
+    $cartStmt->bind_param("i", $userId);
+    $cartStmt->execute();
+    $cartResult = $cartStmt->get_result();
+    $cartRow = $cartResult->fetch_assoc();
+    $cartId = $cartRow['id'] ?? null;
+
+    if ($cartId) {
+        foreach ($selectedItems as $item) {
+            $deleteItemSql = "DELETE FROM cart_items WHERE cart_id = ? AND product_id = ?";
+            $deleteItemStmt = $conn->prepare($deleteItemSql);
+            $deleteItemStmt->bind_param("ii", $cartId, $item['product_id']);
+            $deleteItemStmt->execute();
+        }
+
+        // Delete cart if empty
+        $checkEmptySql = "SELECT 1 FROM cart_items WHERE cart_id = ?";
+        $checkEmptyStmt = $conn->prepare($checkEmptySql);
+        $checkEmptyStmt->bind_param("i", $cartId);
+        $checkEmptyStmt->execute();
+        $checkEmptyResult = $checkEmptyStmt->get_result();
+        if ($checkEmptyResult->num_rows === 0) {
+            $deleteCartSql = "DELETE FROM carts WHERE id = ?";
+            $deleteCartStmt = $conn->prepare($deleteCartSql);
+            $deleteCartStmt->bind_param("i", $cartId);
+            $deleteCartStmt->execute();
+        }
+    }
+
+    // 4️⃣ GCash payment proof
     if ($paymentMethod === 'GCash' && isset($_FILES["payment_proof"])) {
         $targetDir = "../assets/payment_proof/";
-        if (!is_dir($targetDir)) {
-            mkdir($targetDir, 0777, true);
-        }
+        if (!is_dir($targetDir)) mkdir($targetDir, 0777, true);
         $fileName = uniqid() . "_" . basename($_FILES["payment_proof"]["name"]);
-        $targetFilePath = $targetDir . $fileName;
-        move_uploaded_file($_FILES["payment_proof"]["tmp_name"], $targetFilePath);
+        move_uploaded_file($_FILES["payment_proof"]["tmp_name"], $targetDir . $fileName);
         $paymentProofPath = "assets/payment_proof/" . $fileName;
 
         $paymentSql = "INSERT INTO payments (order_id, payment_method, payment_proof, created_at, updated_at)
@@ -166,14 +109,17 @@ try {
 
     $conn->commit();
 
-    $response['success'] = true;
-    $response['message'] = "Request placed successfully.";
-    $response['screen'] = ($paymentMethod === 'GCash') ? 'to-confirm' : 'to-pay';
+    $response = [
+        "success" => true,
+        "message" => "Order placed successfully",
+        "screen" => ($paymentMethod === 'GCash') ? "to-confirm" : "to-pay"
+    ];
 } catch (Exception $e) {
     $conn->rollback();
-    $response['success'] = false;
-    $response['message'] = "Error: " . $e->getMessage();
+    $response = ["success" => false, "message" => $e->getMessage()];
 }
 
 echo json_encode($response);
+
+$conn->close();
 ?>

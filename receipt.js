@@ -1,346 +1,371 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
-  FlatList,
-  ActivityIndicator,
-  Alert,
-  TouchableOpacity,
-  Image,
-  Platform,
+    View,
+    Text,
+    ScrollView,
+    StyleSheet,
+    ActivityIndicator,
+    Image,
+    TouchableOpacity,
+    Linking,
+    RefreshControl,
+    Alert,
+    SafeAreaView, // Import SafeAreaView for proper layout on modern devices
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { useNavigation, useFocusEffect } from '@react-navigation/native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import axios from 'axios';
+import { useNavigation } from '@react-navigation/native'; // Import useNavigation hook
+import Ionicons from 'react-native-vector-icons/Ionicons'; // Import icon library for back button
+import { BASE_URL } from './config';
 
-// Define a consistent color palette
-const colors = {
-  primaryGreen: '#4CAF50',
-  darkerGreen: '#388E3C',
-  lightGreen: '#F0F8F0',
-  accentGreen: '#8BC34A',
-  textPrimary: '#333333',
-  textSecondary: '#666666',
-  white: '#FFFFFF',
-  greyBorder: '#DDDDDD',
-  lightGreyBackground: '#FAFAFA',
-  errorRed: '#e53935',
-};
+const Receipt = ({ route }) => {
+    // Get navigation object from React Navigation
+    const navigation = useNavigation();
 
-const API_BASE_URL = 'http://192.168.250.53/koncepto-app/';
+    // Extract user object and user ID from navigation route params
+    const user = route.params?.user;
+    const userId = user?.id;
 
-const MyReceipt = ({ route }) => {
-  const navigation = useNavigation();
-  const insets = useSafeAreaInsets();
-  const { user } = route.params;
+    // State variables for managing data, loading, refreshing, and errors
+    const [receipts, setReceipts] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [refreshing, setRefreshing] = useState(false);
+    const [error, setError] = useState(null);
 
-  const [receipts, setReceipts] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [expandedReceiptId, setExpandedReceiptId] = useState(null); // State to manage expanded receipt
+    // useEffect hook to fetch data when the component mounts or userId changes
+    useEffect(() => {
+        if (!userId) {
+            console.warn('No user ID passed to receipt screen. Cannot fetch receipts.');
+            setLoading(false);
+            setError('User information missing. Please log in again.');
+            return;
+        }
+        fetchPayments(); // Initial data fetch
+    }, [userId]);
 
-  // Function to format date and time for display
-  const formatDateTime = (dateTimeString) => {
-    if (!dateTimeString) return 'N/A';
-    const date = new Date(dateTimeString);
-    if (isNaN(date.getTime())) return 'Invalid Date';
-    return date.toLocaleString('en-US', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: true,
-    });
-  };
+    // Function to handle fetching payments from the backend
+    const fetchPayments = async () => {
+        setLoading(true);
+        setError(null);
+        try {
+            const response = await axios.post(`${BASE_URL}/get-receipt.php`, { user_id: userId });
 
-  // Function to fetch receipts
-  const fetchReceipts = useCallback(async () => {
-    if (!user?.id) {
-      Alert.alert('Error', 'User ID not found. Cannot fetch receipts.');
-      setLoading(false);
-      return;
-    }
-    setLoading(true);
-    try {
-      const response = await fetch(`${API_BASE_URL}api/get-receipt.php?user_id=${user.id}`);
-      const data = await response.json();
+            if (response.data.status === 'success') {
+                setReceipts(response.data.data);
+            } else {
+                setError(response.data.message || 'Failed to fetch receipts.');
+                setReceipts([]);
+            }
+        } catch (err) {
+            setError(err.message || "An unexpected error occurred while fetching receipts.");
+            Alert.alert("Error", (err.message || "Network error") + "\nPlease check your network connection or server.");
+        } finally {
+            setLoading(false);
+            setRefreshing(false);
+        }
+    };
 
-      if (data.success) {
-        setReceipts(data.receipts);
-      } else {
-        Alert.alert('Error', data.message || 'Failed to fetch receipts.');
-        setReceipts([]);
-      }
-    } catch (error) {
-      console.error('Error fetching receipts:', error);
-      Alert.alert('Network Error', 'Could not connect to the server to fetch receipts.');
-      setReceipts([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [user?.id]);
+    // Handler for pull-to-refresh action
+    const onRefresh = () => {
+        setRefreshing(true); // Activate refreshing indicator
+        fetchPayments();      // Re-fetch payments
+    };
 
-  // Fetch receipts when the component mounts and when it comes into focus
-  useFocusEffect(
-    useCallback(() => {
-      fetchReceipts();
-    }, [fetchReceipts])
-  );
+    // Helper function to format dates for display
+    const formatDate = (dateString) => {
+        if (!dateString) return 'N/A';
+        const date = new Date(dateString);
+        if (isNaN(date.getTime())) return 'Invalid Date'; // Check for invalid date
 
-  // Toggle receipt expansion
-  const toggleExpand = (receiptId) => {
-    setExpandedReceiptId(expandedReceiptId === receiptId ? null : receiptId);
-  };
+        return date.toLocaleString('en-US', {
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: true,
+        });
+    };
 
-  const renderReceiptItem = ({ item: receipt }) => (
-    <View style={styles.receiptCard}>
-      <TouchableOpacity onPress={() => toggleExpand(receipt.id)} style={styles.receiptSummary}>
-        <View style={styles.receiptHeaderRow}>
-          <Text style={styles.receiptId}>Receipt ID: {receipt.id}</Text>
-          <Text style={styles.receiptDate}>{formatDateTime(receipt.receipt_date)}</Text>
-        </View>
-        <View style={styles.receiptHeaderRow}>
-          <Text style={styles.receiptTotal}>Total: ₱{parseFloat(receipt.total_amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</Text>
-          <Ionicons
-            name={expandedReceiptId === receipt.id ? 'chevron-up-outline' : 'chevron-down-outline'}
-            size={20}
-            color={colors.textSecondary}
-          />
-        </View>
-      </TouchableOpacity>
-
-      {expandedReceiptId === receipt.id && (
-        <View style={styles.receiptDetails}>
-          <Text style={styles.itemsHeader}>Items Purchased:</Text>
-          <View style={styles.tableHeader}>
-            <Text style={[styles.tableHeaderText, { flex: 3 }]}>Product</Text>
-            <Text style={[styles.tableHeaderText, { flex: 1, textAlign: 'center' }]}>Qty</Text>
-            <Text style={[styles.tableHeaderText, { flex: 1.5, textAlign: 'right' }]}>Price</Text>
-            <Text style={[styles.tableHeaderText, { flex: 1.5, textAlign: 'right' }]}>Subtotal</Text>
-          </View>
-          {receipt.items.length > 0 ? (
-            receipt.items.map((item, index) => (
-              <View key={item.item_id || index} style={styles.itemRow}>
-                <View style={styles.itemProductCell}>
-                  <Image
-                    source={{ uri: `${API_BASE_URL}assets/${item.image}` }}
-                    style={styles.itemImage}
-                    onError={(e) => console.log('Image Load Error:', e.nativeEvent.error, 'for URI:', `${API_BASE_URL}assets/${item.image}`)}
-                  />
-                  <Text style={styles.itemName}>{item.productName}</Text>
+    // Render logic based on loading, error, and data states
+    const renderContent = () => {
+        if (loading && !refreshing) {
+            return (
+                <View style={styles.centeredContent}>
+                    <ActivityIndicator size="large" color="#4CAF50" />
+                    <Text style={styles.loadingText}>Loading receipts...</Text>
                 </View>
-                <Text style={styles.itemQuantity}>{item.quantity}</Text>
-                <Text style={styles.itemPrice}>₱{parseFloat(item.price_at_purchase).toLocaleString(undefined, { minimumFractionDigits: 2 })}</Text>
-                <Text style={styles.itemSubtotal}>₱{parseFloat(item.item_total).toLocaleString(undefined, { minimumFractionDigits: 2 })}</Text>
-              </View>
-            ))
-          ) : (
-            <Text style={styles.noItemsText}>No items found for this receipt.</Text>
-          )}
-        </View>
-      )}
-    </View>
-  );
+            );
+        }
 
-  return (
-    <View style={[styles.container, { paddingBottom: insets.bottom }]}>
-      {/* Header */}
-      <View style={[styles.header, { paddingTop: insets.top }]}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={28} color={colors.white} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>My Receipts</Text>
-        <View style={{ width: 28 }} />{/* Spacer */}
-      </View>
+        if (error) {
+            return (
+                <ScrollView
+                    contentContainerStyle={styles.centeredContent}
+                    refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#4CAF50" />}
+                >
+                    <Text style={styles.errorText}>Error: {error}</Text>
+                    <Text style={styles.refreshText}>Pull down to refresh</Text>
+                </ScrollView>
+            );
+        }
 
-      {loading ? (
-        <ActivityIndicator size="large" color={colors.primaryGreen} style={styles.loadingIndicator} />
-      ) : receipts.length === 0 ? (
-        <View style={styles.emptyStateContainer}>
-          <Ionicons name="receipt-outline" size={80} color={colors.greyBorder} />
-          <Text style={styles.emptyStateText}>No receipts found.</Text>
-          <Text style={styles.emptyStateSubText}>Start shopping to see your purchase history here!</Text>
-        </View>
-      ) : (
-        <FlatList
-          data={receipts}
-          keyExtractor={(item) => item.id.toString()}
-          renderItem={renderReceiptItem}
-          contentContainerStyle={styles.flatListContent}
-        />
-      )}
-    </View>
-  );
+        if (receipts.length === 0) {
+            return (
+                <ScrollView
+                    contentContainerStyle={styles.centeredContent}
+                    refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#4CAF50" />}
+                >
+                    <Text style={styles.noReceipt}>No receipts found.</Text>
+                    <Text style={styles.refreshText}>Pull down to refresh</Text>
+                </ScrollView>
+            );
+        }
+
+        // Main render for displaying the list of receipts
+        return (
+            <ScrollView
+                style={styles.scrollContainer}
+                contentContainerStyle={styles.scrollContent}
+                refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#4CAF50" />}
+            >
+                {receipts.map((item) => (
+                    <View key={item.payment_id?.toString() || Math.random().toString()} style={styles.receiptCard}>
+                        <View style={styles.receiptHeader}>
+                            <Text style={styles.receiptTitle}>Payment ID: {item.payment_id}</Text>
+                            <Text style={[
+                                styles.receiptStatus,
+                                styles[`status_${item.payment_status?.toLowerCase()}`]
+                            ]}>
+                                {item.payment_status}
+                            </Text>
+                        </View>
+                        <View style={styles.receiptBody}>
+                            <Text style={styles.receiptText}><Text style={styles.label}>Order ID:</Text> {item.order_id || 'N/A'}</Text>
+                            <Text style={styles.receiptText}><Text style={styles.label}>Customer:</Text> {item.first_name} {item.last_name}</Text>
+                            <Text style={styles.receiptText}><Text style={styles.label}>Email:</Text> {item.email || 'N/A'}</Text>
+                            <Text style={styles.receiptText}><Text style={styles.label}>Payment Method:</Text> {item.payment_method || 'N/A'}</Text>
+                            <Text style={styles.receiptText}><Text style={styles.label}>Order Type:</Text> {item.order_type || 'N/A'}</Text>
+                            <Text style={styles.receiptText}><Text style={styles.label}>Payment Date:</Text> {formatDate(item.payment_date || item.created_at)}</Text>
+                            <Text style={styles.receiptText}><Text style={styles.label}>Order Date:</Text> {formatDate(item.Orderdate)}</Text>
+                            <Text style={styles.receiptText}><Text style={styles.label}>Ship Date:</Text> {formatDate(item.Shipdate)}</Text>
+                            <Text style={styles.receiptText}><Text style={styles.label}>Order Status:</Text> {item.order_status || 'N/A'}</Text>
+
+                            {item.payment_proof && (
+                                <TouchableOpacity
+                                    style={styles.imageContainer}
+                                    onPress={() => Linking.openURL(`${BASE_URL.replace('/api', '')}/uploads/${item.payment_proof}`)}
+                                >
+                                    <Text style={styles.label}>Payment Proof:</Text>
+                                    <Image
+                                        source={{ uri: `${BASE_URL.replace('/api', '')}/uploads/${item.payment_proof}` }}
+                                        style={styles.image}
+                                        resizeMode="contain"
+                                    />
+                                    <Text style={styles.viewProofText}>Tap to View Full Proof</Text>
+                                </TouchableOpacity>
+                            )}
+                        </View>
+                    </View>
+                ))}
+            </ScrollView>
+        );
+    };
+
+    return (
+        <SafeAreaView style={styles.safeArea}>
+            {/* Custom Header */}
+            <View style={styles.customHeader}>
+                <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+                    <Ionicons name="arrow-back" size={24} color="#fff" />
+                </TouchableOpacity>
+                <Text style={styles.headerTitle}>My Payment Receipts</Text>
+                <View style={styles.backButtonPlaceholder} /> {/* Placeholder for alignment */}
+            </View>
+
+            {/* Main Content Area */}
+            <View style={styles.contentArea}>
+                {renderContent()}
+            </View>
+
+            {/* Footer */}
+            <View style={styles.footer}>
+                <Text style={styles.footerText}>© Koncepto App 2025</Text>
+            </View>
+        </SafeAreaView>
+    );
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.lightGreyBackground,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.primaryGreen,
-    paddingHorizontal: 16,
-    paddingBottom: 15,
-    justifyContent: 'space-between',
-    borderBottomLeftRadius: 20,
-    borderBottomRightRadius: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.2,
-    shadowRadius: 5,
-    elevation: 5,
-  },
-  backButton: {
-    paddingRight: 10,
-  },
-  headerTitle: {
-    color: colors.white,
-    fontSize: 22,
-    fontWeight: 'bold',
-    flex: 1,
-    textAlign: 'center',
-    marginRight: 28, // Compensate for back button
-  },
-  loadingIndicator: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  emptyStateContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-  },
-  emptyStateText: {
-    fontSize: 18,
-    color: colors.textSecondary,
-    marginTop: 15,
-    fontWeight: 'bold',
-  },
-  emptyStateSubText: {
-    fontSize: 14,
-    color: colors.textSecondary,
-    textAlign: 'center',
-    marginTop: 5,
-  },
-  flatListContent: {
-    padding: 10,
-    paddingBottom: 20, // Add some padding at the bottom
-  },
-  receiptCard: {
-    backgroundColor: colors.white,
-    borderRadius: 10,
-    marginVertical: 8,
-    marginHorizontal: 5,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 3,
-    overflow: 'hidden', // Ensures rounded corners clip content
-  },
-  receiptSummary: {
-    padding: 15,
-  },
-  receiptHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 5,
-  },
-  receiptId: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: colors.primaryGreen,
-  },
-  receiptDate: {
-    fontSize: 13,
-    color: colors.textSecondary,
-  },
-  receiptTotal: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: colors.errorRed,
-  },
-  receiptDetails: {
-    borderTopWidth: 1,
-    borderTopColor: colors.greyBorder,
-    padding: 15,
-    backgroundColor: colors.lightGreen, // Slightly different background for expanded details
-  },
-  itemsHeader: {
-    fontSize: 15,
-    fontWeight: 'bold',
-    color: colors.darkerGreen,
-    marginBottom: 10,
-  },
-  tableHeader: {
-    flexDirection: 'row',
-    paddingVertical: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.darkerGreen,
-    marginBottom: 5,
-  },
-  tableHeaderText: {
-    fontWeight: 'bold',
-    color: colors.textPrimary,
-    fontSize: 12,
-  },
-  itemRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 5,
-    borderBottomWidth: 0.5,
-    borderBottomColor: colors.greyBorder,
-  },
-  itemProductCell: {
-    flex: 3,
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  itemImage: {
-    width: 30,
-    height: 30,
-    borderRadius: 5,
-    marginRight: 8,
-    backgroundColor: colors.white,
-  },
-  itemName: {
-    fontSize: 12,
-    color: colors.textPrimary,
-    flexShrink: 1,
-  },
-  itemQuantity: {
-    flex: 1,
-    fontSize: 12,
-    color: colors.textPrimary,
-    textAlign: 'center',
-  },
-  itemPrice: {
-    flex: 1.5,
-    fontSize: 12,
-    color: colors.textPrimary,
-    textAlign: 'right',
-  },
-  itemSubtotal: {
-    flex: 1.5,
-    fontSize: 12,
-    fontWeight: 'bold',
-    color: colors.textPrimary,
-    textAlign: 'right',
-  },
-  noItemsText: {
-    fontStyle: 'italic',
-    color: colors.textSecondary,
-    textAlign: 'center',
-    marginTop: 10,
-    fontSize: 12,
-  },
+    safeArea: {
+        flex: 1,
+        backgroundColor: '#e8f5e9', // Light green for the entire screen background
+    },
+    customHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        backgroundColor: '#2e7d32', // Darker green for header
+        paddingVertical: 12,
+        paddingHorizontal: 15,
+        borderBottomWidth: 1,
+        borderBottomColor: '#1b5e20',
+        elevation: 5, // Android shadow
+        shadowColor: '#000', // iOS shadow
+        shadowOffset: { width: 0, height: 3 },
+        shadowOpacity: 0.3,
+        shadowRadius: 5,
+    },
+    backButton: {
+        padding: 5,
+    },
+    backButtonPlaceholder: { // To balance the header layout
+        width: 24 + 10, // Icon size + padding
+    },
+    headerTitle: {
+        color: '#fff',
+        fontSize: 20,
+        fontWeight: 'bold',
+    },
+    contentArea: {
+        flex: 1, // Takes up remaining space between header and footer
+        backgroundColor: '#e8f5e9', // Matches safeArea background
+    },
+    scrollContainer: {
+        flex: 1,
+        backgroundColor: '#e8f5e9',
+    },
+    scrollContent: {
+        padding: 16,
+        paddingBottom: 20,
+    },
+    centeredContent: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        backgroundColor: '#e8f5e9',
+    },
+    loadingText: {
+        marginTop: 10,
+        fontSize: 16,
+        color: '#555',
+    },
+    errorText: {
+        color: '#d32f2f',
+        fontSize: 16,
+        textAlign: 'center',
+        marginBottom: 10,
+    },
+    refreshText: {
+        marginTop: 5,
+        fontSize: 14,
+        color: '#777',
+        textAlign: 'center',
+    },
+    noReceipt: {
+        fontSize: 16,
+        fontStyle: 'italic',
+        color: '#777',
+        marginTop: 10,
+    },
+    receiptCard: {
+        backgroundColor: '#ffffff',
+        borderRadius: 10,
+        padding: 18,
+        marginBottom: 16,
+        borderWidth: 1,
+        borderColor: '#c8e6c9',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 3 },
+        shadowOpacity: 0.15,
+        shadowRadius: 5,
+        elevation: 4,
+    },
+    receiptHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 15,
+        borderBottomWidth: 1,
+        borderBottomColor: '#e0e0e0',
+        paddingBottom: 10,
+    },
+    receiptTitle: {
+        fontWeight: 'bold',
+        fontSize: 19,
+        color: '#2e7d32',
+    },
+    receiptStatus: {
+        fontWeight: 'bold',
+        fontSize: 15,
+        paddingVertical: 5,
+        paddingHorizontal: 10,
+        borderRadius: 20,
+        color: '#fff',
+        backgroundColor: '#4CAF50',
+        textTransform: 'uppercase',
+    },
+    status_pending: {
+        backgroundColor: '#ffc107', // Amber for pending
+        color: '#333',
+    },
+    status_completed: {
+        backgroundColor: '#4CAF50', // Green for completed
+    },
+    status_failed: {
+        backgroundColor: '#f44336', // Red for failed
+    },
+    status_cancelled: {
+        backgroundColor: '#9e9e9e', // Gray for cancelled
+    },
+    receiptBody: {
+        marginTop: 5,
+    },
+    receiptText: {
+        fontSize: 15,
+        color: '#424242',
+        marginBottom: 8,
+        lineHeight: 22,
+    },
+    label: {
+        fontWeight: 'bold',
+        color: '#1b5e20',
+    },
+    imageContainer: {
+        marginTop: 15,
+        alignItems: 'center',
+        borderWidth: 1,
+        borderColor: '#e0e0e0',
+        borderRadius: 8,
+        padding: 5,
+        backgroundColor: '#fcfcfc',
+    },
+    image: {
+        height: 180,
+        width: '100%',
+        borderRadius: 6,
+    },
+    viewProofText: {
+        marginTop: 8,
+        fontSize: 13,
+        color: '#1976d2',
+        textDecorationLine: 'underline',
+    },
+    footer: {
+        backgroundColor: '#2e7d32', // Darker green for footer
+        paddingVertical: 12,
+        alignItems: 'center',
+        borderTopWidth: 1,
+        borderTopColor: '#1b5e20',
+        elevation: 5,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: -3 }, // Shadow pointing upwards
+        shadowOpacity: 0.3,
+        shadowRadius: 5,
+    },
+    footerText: {
+        color: '#fff',
+        fontSize: 14,
+    },
 });
 
-export default MyReceipt;
+export default Receipt;

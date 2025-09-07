@@ -4,20 +4,15 @@ header("Access-Control-Allow-Methods: POST");
 header("Access-Control-Allow-Headers: Content-Type");
 header("Content-Type: application/json");
 
-$conn = new mysqli("localhost", "root", "", "koncepto1");
-
-if ($conn->connect_error) {
-    echo json_encode(["success" => false, "message" => "Database connection failed"]);
-    exit();
-}
+include __DIR__ . '/db_connection.php'; // ✅ separate DB connection
 
 $first_name = $_POST['first_name'] ?? '';
-$last_name = $_POST['last_name'] ?? '';
-$cp_no = $_POST['cp_no'] ?? '';
-$school_id = $_POST['school_id'] ?? null;
-$email = $_POST['email'] ?? '';
-$password = $_POST['password'] ?? '';
-$role = 'user'; // default
+$last_name  = $_POST['last_name'] ?? '';
+$cp_no      = $_POST['cp_no'] ?? '';
+$school_id  = $_POST['school_id'] ?? null;
+$email      = $_POST['email'] ?? '';
+$password   = $_POST['password'] ?? '';
+$role       = 'user';
 $credentialsPath = null;
 
 // Validation
@@ -26,7 +21,7 @@ if (!$first_name || !$last_name || !$cp_no || !$school_id || !$email || !$passwo
     exit();
 }
 
-// Check for duplicate email
+// Check duplicate email
 $check = $conn->prepare("SELECT id FROM users WHERE email = ?");
 $check->bind_param("s", $email);
 $check->execute();
@@ -38,25 +33,26 @@ if ($check->num_rows > 0) {
 }
 $check->close();
 
-// File upload
+// Handle credentials file upload
 if (isset($_FILES['credentials']) && $_FILES['credentials']['error'] === UPLOAD_ERR_OK) {
     $fileTmpPath = $_FILES['credentials']['tmp_name'];
     $fileName = uniqid() . '_' . basename($_FILES['credentials']['name']);
     $uploadDir = __DIR__ . '/uploads/';
     if (!is_dir($uploadDir)) mkdir($uploadDir, 0777, true);
-    $destination = $uploadDir . $fileName;
 
-    if (move_uploaded_file($fileTmpPath, $destination)) {
-        $credentialsPath = 'uploads/' . $fileName;
-    } else {
+    $destination = $uploadDir . $fileName;
+    if (!move_uploaded_file($fileTmpPath, $destination)) {
         echo json_encode(["success" => false, "message" => "File upload failed"]);
         exit();
     }
+
+    $credentialsPath = 'uploads/' . $fileName;
 } else {
     echo json_encode(["success" => false, "message" => "No file uploaded"]);
     exit();
 }
 
+// Insert user
 $now = date('Y-m-d H:i:s');
 $stmt = $conn->prepare("INSERT INTO users (first_name, last_name, cp_no, school_id, email, password, credentials, role, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
 $stmt->bind_param("ssssssssss", $first_name, $last_name, $cp_no, $school_id, $email, $password, $credentialsPath, $role, $now, $now);

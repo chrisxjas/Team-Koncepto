@@ -4,39 +4,44 @@ header("Access-Control-Allow-Origin: *");
 header("Access-Control-Allow-Methods: POST");
 header("Access-Control-Allow-Headers: Content-Type");
 
-$conn = new mysqli("localhost", "root", "", "koncepto1");
-
-if ($conn->connect_error) {
-    echo json_encode(["success" => false, "message" => "Database connection failed"]);
-    exit;
-}
+include __DIR__ . '/db_connection.php'; // ✅ separate DB connection
 
 $data = json_decode(file_get_contents("php://input"), true);
-$cart_item_id = $data["cart_item_id"] ?? null;
+$cart_item_id = isset($data['cart_item_id']) ? intval($data['cart_item_id']) : 0;
 
 if (!$cart_item_id) {
     echo json_encode(["success" => false, "message" => "Missing cart_item_id"]);
-    exit;
+    exit();
 }
 
-// Secure the ID
-$cart_item_id = intval($cart_item_id);
+// Get the cart_id of the item
+$stmt = $conn->prepare("SELECT cart_id FROM cart_items WHERE id = ?");
+$stmt->bind_param("i", $cart_item_id);
+$stmt->execute();
+$result = $stmt->get_result();
 
-// Get the cart_id of the item to be deleted
-$get_cart = $conn->query("SELECT cart_id FROM cart_items WHERE id = $cart_item_id");
-if ($get_cart->num_rows === 0) {
+if ($result->num_rows === 0) {
     echo json_encode(["success" => false, "message" => "Cart item not found"]);
-    exit;
+    $stmt->close();
+    exit();
 }
-$cart_id = $get_cart->fetch_assoc()['cart_id'];
 
-// Delete the item
-$conn->query("DELETE FROM cart_items WHERE id = $cart_item_id");
+$cart_id = $result->fetch_assoc()['cart_id'];
+$stmt->close();
 
-// Optionally delete the cart if it has no more items
-$conn->query("DELETE FROM carts WHERE id = $cart_id AND NOT EXISTS (
-    SELECT 1 FROM cart_items WHERE cart_id = $cart_id
-)");
+// Delete the cart item
+$delStmt = $conn->prepare("DELETE FROM cart_items WHERE id = ?");
+$delStmt->bind_param("i", $cart_item_id);
+$delStmt->execute();
+$delStmt->close();
+
+// Delete the cart if empty
+$checkCartStmt = $conn->prepare("DELETE FROM carts WHERE id = ? AND NOT EXISTS (SELECT 1 FROM cart_items WHERE cart_id = ?)");
+$checkCartStmt->bind_param("ii", $cart_id, $cart_id);
+$checkCartStmt->execute();
+$checkCartStmt->close();
 
 echo json_encode(["success" => true, "message" => "Item removed from cart"]);
+
 $conn->close();
+?>

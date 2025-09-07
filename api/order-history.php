@@ -2,7 +2,11 @@
 header("Content-Type: application/json");
 header("Access-Control-Allow-Origin: *");
 
-$conn = new mysqli("localhost", "root", "", "koncepto1");
+// Enable error reporting for debugging (remove in production)
+ini_set('display_errors', 1);
+error_reporting(E_ALL);
+
+include __DIR__ . '/db_connection.php';
 
 $user_id = $_GET["user_id"] ?? null;
 
@@ -11,6 +15,7 @@ if (!$user_id) {
     exit;
 }
 
+// Corrected SQL with proper table names
 $sql = "
     SELECT 
         orders.id AS order_id,
@@ -21,20 +26,28 @@ $sql = "
         products.image,
         products.description,
         products.id AS product_id,
-        SUM(order_detail.quantity * order_detail.price) AS total_price
+        SUM(order_details.quantity * order_details.price) AS total_price
     FROM orders
-    JOIN order_detail ON orders.id = order_detail.order_id
-    JOIN products ON order_detail.product_id = products.id
-    WHERE orders.user_id = '$user_id' AND orders.status = 'order success'
+    JOIN order_details ON orders.id = order_details.order_id
+    JOIN products ON order_details.product_id = products.id
+    WHERE orders.user_id = ? AND orders.status = 'order success'
     GROUP BY orders.id, products.id
 ";
 
-$result = $conn->query($sql);
-
-if (!$result) {
-    echo json_encode(["success" => false, "message" => "Database error: " . $conn->error]);
+$stmt = $conn->prepare($sql);
+if (!$stmt) {
+    echo json_encode(["success" => false, "message" => "SQL prepare failed: " . $conn->error]);
     exit;
 }
+
+$stmt->bind_param("i", $user_id);
+
+if (!$stmt->execute()) {
+    echo json_encode(["success" => false, "message" => "SQL execute failed: " . $stmt->error]);
+    exit;
+}
+
+$result = $stmt->get_result();
 
 $orders = [];
 while ($row = $result->fetch_assoc()) {
@@ -52,3 +65,7 @@ while ($row = $result->fetch_assoc()) {
 }
 
 echo json_encode(["success" => true, "orders" => $orders]);
+
+$stmt->close();
+$conn->close();
+?>

@@ -5,9 +5,8 @@ import {
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { Ionicons, FontAwesome5 } from '@expo/vector-icons';
+import { BASE_URL } from './config';
 
-// Make sure this API base URL is correct for your backend
-const API = 'http://192.168.250.53/koncepto-app/api';
 
 const { height: screenHeight } = Dimensions.get('window');
 
@@ -85,7 +84,7 @@ const PlaceRequest = ({ route, navigation }) => {
         });
       }
 
-      const response = await fetch(`${API}/place-request.php`, {
+      const response = await fetch(`${BASE_URL}/place-request.php`, {
         method: 'POST',
         body: formData,
       });
@@ -112,14 +111,10 @@ const PlaceRequest = ({ route, navigation }) => {
     }
   };
 
-  // ***** FIX APPLIED HERE *****
-  // Assuming product images are in the 'assets' directory,
-  // similar to how your payment proofs are stored.
-  // The path will be: http://192.168.250.53/koncepto-app/assets/{image_name.jpg}
   const renderItem = ({ item }) => (
     <View style={styles.itemContainer}>
       <Image
-        source={{ uri: `${API.replace('/api', '')}/assets/${item.image}` }}
+        source={{ uri: `${BASE_URL.replace('/api', '')}/assets/${item.image}` }}
         style={styles.productImage}
       />
       <View style={styles.itemInfo}>

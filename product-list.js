@@ -2,32 +2,33 @@ import React, { useEffect, useState } from 'react';
 import {
   View, Text, Image, TextInput, StyleSheet,
   FlatList, TouchableOpacity, ActivityIndicator,
-  Dimensions, Modal, Pressable, ScrollView, Platform
+  Dimensions, Modal, ScrollView, Platform
 } from 'react-native';
+import { Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native'; // Import useNavigation hook
+import { useNavigation } from '@react-navigation/native';
+import { BASE_URL } from './config';
 
 const { width } = Dimensions.get('window');
-const CARD_WIDTH = (width - 48) / 2; // Adjusted for more padding (24 padding on each side, so 48 total)
+const CARD_WIDTH = (width - 48) / 2;
 
-// Define colors in a shared object for consistency
 const colors = {
-  primaryGreen: '#4CAF50', // A vibrant green
-  darkerGreen: '#388E3C', // A slightly darker green for active states/accents
-  lightGreen: '#F0F8F0', // Very light green for backgrounds
-  accentGreen: '#8BC34A', // Another shade of green if needed
-  textPrimary: '#333333', // Dark text for readability
-  textSecondary: '#666666', // Lighter text for secondary info
+  primaryGreen: '#4CAF50',
+  darkerGreen: '#388E3C',
+  lightGreen: '#F0F8F0',
+  accentGreen: '#8BC34A',
+  textPrimary: '#333333',
+  textSecondary: '#666666',
   white: '#FFFFFF',
-  greyBorder: '#DDDDDD', // Light grey for borders and lines
-  lightGreyBackground: '#FAFAFA', // General light background
-  errorRed: '#e53935', // For prices and errors
+  greyBorder: '#DDDDDD',
+  lightGreyBackground: '#FAFAFA',
+  errorRed: '#e53935',
 };
 
 const ProductList = ({ route }) => {
-  const navigation = useNavigation(); // Initialize navigation hook
+  const navigation = useNavigation();
   const { user } = route.params;
-  const [activeTab, setActiveTab] = useState('Home'); // ✅ ACTIVE TAB STATE
+  const [activeTab, setActiveTab] = useState('Home');
   const [products, setProducts] = useState([]);
   const [filteredProducts, setFilteredProducts] = useState([]);
   const [categories, setCategories] = useState([]);
@@ -35,9 +36,6 @@ const ProductList = ({ route }) => {
   const [loading, setLoading] = useState(true);
   const [showFilter, setShowFilter] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-
-  // IMPORTANT: Replace this with your actual API base URL
-  const API_BASE = 'http://192.168.250.53/koncepto-app/api';
 
   const handleSearch = (text) => {
     setSearchQuery(text);
@@ -57,7 +55,7 @@ const ProductList = ({ route }) => {
   }, []);
 
   const fetchProducts = () => {
-    fetch(`${API_BASE}/get-products.php`)
+    fetch(`${BASE_URL}/get-products.php`)
       .then(res => res.json())
       .then(data => {
         if (data.success) {
@@ -70,11 +68,10 @@ const ProductList = ({ route }) => {
   };
 
   const fetchCategories = () => {
-    fetch(`${API_BASE}/get-categories.php`)
+    fetch(`${BASE_URL}/get-categories.php`)
       .then(res => res.json())
       .then(data => {
         if (data.success) {
-          // Add 'All' category at the beginning
           setCategories([{ id: null, categoryName: 'All' }, ...data.categories]);
         }
       })
@@ -103,12 +100,12 @@ const ProductList = ({ route }) => {
 
   const renderProduct = ({ item }) => (
     <TouchableOpacity
-      style={styles.cardWrapper} // Added a wrapper for consistent spacing
+      style={styles.cardWrapper}
       onPress={() => navigation.navigate('ProductDetail', { product: item, user })}
     >
       <View style={styles.card}>
         <Image
-          source={{ uri: `${API_BASE.replace('/api', '/assets')}/${item.image}` }} // Corrected image path
+          source={{ uri: `${BASE_URL.replace('/api', '/assets')}/${item.image}` }}
           style={styles.image}
         />
         <Text style={styles.name} numberOfLines={2}>{item.productName}</Text>
@@ -183,21 +180,19 @@ const ProductList = ({ route }) => {
         />
       )}
 
-      {/* Floating Action Button (FAB) */}
+      {/* Floating Action Button for Custom Order */}
       <TouchableOpacity
         style={styles.fabButton}
-        onPress={() => {
-          setActiveTab('CustomOrder'); // Optionally set active tab to message
-          navigation.navigate('CustomOrder', { user }); // Navigate to the Message screen
-        }}
+        onPress={() => navigation.navigate('CustomOrder', { user })}
       >
-        <Ionicons name="create-outline" size={28} color={colors.white} />
+        <Ionicons name="add" size={30} color={colors.white} />
+        {/* Removed the Text component for "Custom Order" */}
       </TouchableOpacity>
 
       {/* Bottom Navigation */}
       <View style={styles.bottomNav}>
         <TouchableOpacity
-          onPress={() => { setActiveTab('Home'); /* navigation.navigate('ProductList', { user }); // Already on ProductList */ }}
+          onPress={() => { setActiveTab('Home'); }}
           style={styles.navButton}
         >
           <Ionicons name="home" size={24} color={activeTab === 'Home' ? colors.white : '#B0E0A0'} />
@@ -246,38 +241,36 @@ export default ProductList;
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.lightGreyBackground, // Use light grey background
+    backgroundColor: colors.lightGreyBackground,
   },
-  // Header Styles
   header: {
     backgroundColor: colors.primaryGreen,
-    paddingTop: Platform.OS === 'android' ? 30 : 50, // Adjust for status bar
-    paddingBottom: 15, // Increased padding
+    paddingTop: Platform.OS === 'android' ? 30 : 50,
+    paddingBottom: 15,
     alignItems: 'center',
     justifyContent: 'center',
-    borderBottomLeftRadius: 20, // Rounded bottom corners
+    borderBottomLeftRadius: 20,
     borderBottomRightRadius: 20,
-    shadowColor: '#000', // Add shadow for depth
+    shadowColor: '#000',
     shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.2,
     shadowRadius: 5,
     elevation: 5,
   },
   logo: {
-    width: 150, // Slightly adjusted width
-    height: 50, // Slightly adjusted height
+    width: 150,
+    height: 50,
     resizeMode: 'contain',
   },
-  // Search & Filter Styles
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16, // Consistent padding
+    paddingHorizontal: 16,
     paddingVertical: 10,
-    backgroundColor: colors.white, // White background for search area
+    backgroundColor: colors.white,
     marginHorizontal: 16,
     borderRadius: 10,
-    marginTop: -20, // Overlap with header for a visually pleasing effect
+    marginTop: -20,
     marginBottom: 10,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
@@ -289,7 +282,7 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.lightGreyBackground, // Lighter background for the input itself
+    backgroundColor: colors.lightGreyBackground,
     borderRadius: 8,
     paddingHorizontal: 10,
     marginRight: 10,
@@ -299,7 +292,7 @@ const styles = StyleSheet.create({
   },
   searchInput: {
     flex: 1,
-    height: 40, // Consistent height
+    height: 40,
     color: colors.textPrimary,
   },
   filterButton: {
@@ -309,20 +302,19 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  // Product List Styles
   list: {
-    paddingHorizontal: 16, // Consistent padding
-    paddingBottom: 100, // Make space for bottom nav
+    paddingHorizontal: 16,
+    paddingBottom: 100,
   },
   cardWrapper: {
     width: CARD_WIDTH,
-    margin: 8, // Spacing between cards
+    margin: 8,
   },
   card: {
-    flex: 1, // Allow card to fill wrapper
+    flex: 1,
     backgroundColor: colors.white,
     borderRadius: 12,
-    padding: 12, // Increased padding
+    padding: 12,
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#000',
@@ -331,22 +323,22 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   image: {
-    width: 100, // Slightly larger images
-    height: 100, // Slightly larger images
+    width: 100,
+    height: 100,
     resizeMode: 'contain',
     marginBottom: 10,
   },
   name: {
-    fontSize: 15, // Slightly larger font
-    fontWeight: '500', // Medium weight for product names
+    fontSize: 15,
+    fontWeight: '500',
     textAlign: 'center',
     marginBottom: 5,
     color: colors.textPrimary,
   },
   price: {
     fontWeight: 'bold',
-    fontSize: 16, // Larger price font
-    color: colors.errorRed, // Using a dedicated errorRed for prices for visibility
+    fontSize: 16,
+    color: colors.errorRed,
   },
   emptyListContainer: {
     flex: 1,
@@ -358,65 +350,63 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: colors.textSecondary,
   },
-  // Bottom Navigation Styles
   bottomNav: {
     position: 'absolute',
     bottom: 0,
     width: '100%',
-    backgroundColor: colors.darkerGreen, // Darker green for a solid base
+    backgroundColor: colors.darkerGreen,
     flexDirection: 'row',
     justifyContent: 'space-around',
-    paddingVertical: 10, // Increased padding
-    borderTopLeftRadius: 20, // Rounded top corners
+    paddingVertical: 10,
+    borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
-    shadowColor: '#000', // Add shadow for depth
-    shadowOffset: { width: 0, height: -3 }, // Shadow above
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -3 },
     shadowOpacity: 0.2,
     shadowRadius: 5,
-    elevation: 8, // Higher elevation for bottom nav
+    elevation: 8,
   },
   navButton: {
     alignItems: 'center',
-    paddingVertical: 5, // Keep small padding
+    paddingVertical: 5,
     paddingHorizontal: 10,
-    borderRadius: 10, // Slightly rounded corners
+    borderRadius: 10,
   },
   navLabel: {
-    color: '#B0E0A0', // Lighter green for inactive labels
+    color: '#B0E0A0',
     fontSize: 12,
     marginTop: 2,
     fontWeight: '500',
   },
   activeNavLabel: {
-    color: colors.white, // White for active labels
+    color: colors.white,
     fontWeight: 'bold',
   },
-  // Filter Modal Styles
   modalOverlay: {
     flex: 1,
     justifyContent: 'center',
-    alignItems: 'center', // Center the modal box
-    backgroundColor: 'rgba(0,0,0,0.4)', // Slightly darker overlay
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.4)',
   },
   filterBox: {
     backgroundColor: colors.white,
-    marginHorizontal: 30, // Less margin
-    borderRadius: 15, // More rounded corners
-    padding: 25, // Increased padding
-    elevation: 10, // Stronger shadow
-    width: '80%', // Make it take up a good portion of the width
+    marginHorizontal: 30,
+    borderRadius: 15,
+    padding: 25,
+    elevation: 10,
+    width: '80%',
   },
   filterTitle: {
-    fontSize: 20, // Larger title
+    fontSize: 20,
     fontWeight: 'bold',
-    marginBottom: 15, // More space
+    marginBottom: 15,
     color: colors.textPrimary,
-    textAlign: 'center', // Center align title
+    textAlign: 'center',
   },
   filterOptionButton: {
-    paddingVertical: 12, // More padding for touch area
+    paddingVertical: 12,
     paddingHorizontal: 10,
-    borderBottomWidth: 1, // Add subtle dividers
+    borderBottomWidth: 1,
     borderBottomColor: colors.greyBorder,
   },
   filterOptionText: {
@@ -425,7 +415,7 @@ const styles = StyleSheet.create({
   },
   selectedFilterOption: {
     fontWeight: 'bold',
-    color: colors.primaryGreen, // Primary green for selected option
+    color: colors.primaryGreen,
   },
   closeFilterButton: {
     marginTop: 20,
@@ -439,22 +429,23 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     fontSize: 16,
   },
-  // FAB Styles
   fabButton: {
     position: 'absolute',
-    bottom: 90, // Adjust based on bottom nav height + desired spacing
+    bottom: 90,
     right: 20,
     backgroundColor: colors.primaryGreen,
-    width: 60,
+    width: 60, // Set width and height to be equal
     height: 60,
-    borderRadius: 30, // Makes it a perfect circle
+    borderRadius: 30, // Half of width/height for a perfect circle
     justifyContent: 'center',
     alignItems: 'center',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 5,
-    elevation: 6, // Ensures it floats above other elements
-    zIndex: 10, // Make sure it's on top
+    elevation: 6,
+    zIndex: 10,
+    // Removed flexDirection and marginLeft from here as text is removed
   },
+  // Removed fabButtonText style as the text is removed from the button
 });

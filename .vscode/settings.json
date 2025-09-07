@@ -1,4 +1,37 @@
 {
     "javascript.validate.enable": false,
-    "typescript.validate.enable": false
+    "typescript.validate.enable": false,
+    "cSpell.words": [
+        "accountcredentials",
+        "Bondpaper",
+        "chatbubble",
+        "chatbubbles",
+        "checkmark",
+        "Dela",
+        "ERRMODE",
+        "gcash",
+        "iiid",
+        "iiidss",
+        "iiisi",
+        "iiss",
+        "iisss",
+        "iisssidssi",
+        "iisssississs",
+        "iisssisssss",
+        "isssisssss",
+        "isssss",
+        "kocenpto",
+        "Koncepto",
+        "konceptoapp",
+        "kpoints",
+        "mobileprovision",
+        "myprofile",
+        "Orderdate",
+        "Pressable",
+        "pricetag",
+        "profilepic",
+        "recieve",
+        "Shipdate",
+        "sssii"
+    ]
 }

@@ -4,6 +4,7 @@ import {
   Alert, Modal, ScrollView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { BASE_URL } from './config';
 
 // Define colors in a shared object for consistency
 const colors = {
@@ -22,8 +23,6 @@ const colors = {
   gold: '#FFD700',
 };
 
-const API = 'http://192.168.250.53/koncepto-app/api'; // Ensure your IP is correct
-
 const ProductDetail = ({ route, navigation }) => {
   const { product, user } = route.params || {};
   const [quantity, setQuantity] = useState(1);
@@ -38,7 +37,7 @@ const ProductDetail = ({ route, navigation }) => {
 
   const fetchFeedbacks = () => {
     if (product?.id) {
-      fetch(`${API}/get-feedbacks.php?product_id=${product.id}`)
+      fetch(`${BASE_URL}/get-feedbacks.php?product_id=${product.id}`)
         .then(res => res.json())
         .then(data => {
           if (data.success) {
@@ -53,7 +52,6 @@ const ProductDetail = ({ route, navigation }) => {
   };
 
   const handleLikeToggle = (feedbackId, currentLikeCount, hasUserLiked) => {
-    // Optimistically update UI
     setFeedbacks(prevFeedbacks =>
       prevFeedbacks.map(fb =>
         fb.id === feedbackId
@@ -63,34 +61,31 @@ const ProductDetail = ({ route, navigation }) => {
     );
 
     // Send request to backend
-    fetch(`${API}/toggle-feedback-like.php`, {
+    fetch(`${BASE_URL}/toggle-feedback-like.php`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         feedback_id: feedbackId,
-        user_id: user.id, // Pass user ID to track who liked
+        user_id: user.id,
         action: hasUserLiked ? 'unlike' : 'like'
       }),
     })
       .then(res => res.json())
       .then(data => {
         if (!data.success) {
-          // Revert UI if backend fails (optional but good practice)
           setFeedbacks(prevFeedbacks =>
             prevFeedbacks.map(fb =>
               fb.id === feedbackId
-                ? { ...fb, like: hasUserLiked ? currentLikeCount + 1 : Math.max(0, currentLikeCount - 1) } // Revert to original
+                ? { ...fb, like: hasUserLiked ? currentLikeCount + 1 : Math.max(0, currentLikeCount - 1) }
                 : fb
             )
           );
           Alert.alert('Error', data.message || 'Failed to update like status.');
         }
-        // If success, UI is already updated, no need to re-fetch
       })
       .catch(error => {
         console.error('Toggle like error:', error);
         Alert.alert('Error', 'Network error while updating like status.');
-        // Revert UI on network error
         setFeedbacks(prevFeedbacks =>
           prevFeedbacks.map(fb =>
             fb.id === feedbackId
@@ -114,7 +109,7 @@ const ProductDetail = ({ route, navigation }) => {
       replace: false
     };
 
-    fetch(`${API}/add-to-cart.php`, {
+    fetch(`${BASE_URL}/add-to-cart.php`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
@@ -124,8 +119,7 @@ const ProductDetail = ({ route, navigation }) => {
         if (data.success) {
           setShowModal(false);
           Alert.alert('Success', 'Item added to cart!');
-          // You might want to navigate to cart or update cart count
-          navigation.navigate('Carts', { user }); // Consider replace or just navigate
+          navigation.navigate('Carts', { user });
         } else {
           Alert.alert('Error', data.message || 'Failed to add to cart.');
         }
@@ -178,9 +172,9 @@ const ProductDetail = ({ route, navigation }) => {
         {/* Product Details Card */}
         <View style={styles.productDetailsCard}>
           <Image
-            source={{ uri: `${API.replace('/api', '')}/assets/${product.image}` }}
-            style={styles.image}
-          />
+          source={{ uri: `${BASE_URL.replace('/api', '')}/assets/${product.image}` }}
+          style={styles.image}
+        />
           <Text style={styles.name}>{product.productName}</Text>
           <Text style={styles.brand}>{product.brandName}</Text>
           <Text style={styles.description}>{product.description || 'No description available.'}</Text>

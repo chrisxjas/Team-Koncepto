@@ -20,6 +20,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import * as Clipboard from 'expo-clipboard';
+import { BASE_URL } from './config';
 
 // Enable LayoutAnimation for Android
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -42,18 +43,20 @@ const colors = {
   bubbleReceived: '#FFFFFF', // White for received messages
 };
 
-// Define the API base URL here, outside the component to prevent re-creation
-const API_BASE_URL = 'http://192.168.250.53/koncepto-app/api/';
-
 // Constants for layout calculations
-const INPUT_AREA_DEFAULT_HEIGHT = 60; // Approx. min height of input area (minHeight 40 + paddingVertical 20)
 const BOTTOM_NAV_HEIGHT = 70; // Explicit height from your bottomNav styles
+// Manually calculate the header offset based on the styles
+const HEADER_HEIGHT = Platform.OS === 'android' ? 30 + 15 : 50 + 15; // paddingTop + paddingBottom
+const CHAT_PARTNER_INFO_HEIGHT = 12 * 2 + 5; // paddingVertical * 2 + marginBottom for the prompt text
+const FIXED_CONTENT_HEIGHT = HEADER_HEIGHT + CHAT_PARTNER_INFO_HEIGHT;
 
 export default function MessageScreen() {
   const [messagesData, setMessagesData] = useState([]);
   const [message, setMessage] = useState('');
   const [selectedMessageId, setSelectedMessageId] = useState(null);
   const [activeTab, setActiveTab] = useState('Message');
+  // We no longer need this dynamic state
+  // const [headerOffset, setHeaderOffset] = useState(0);
 
   const navigation = useNavigation();
   const route = useRoute();
@@ -69,7 +72,7 @@ export default function MessageScreen() {
         console.warn('User ID is missing, cannot fetch messages.');
         return;
       }
-      const response = await fetch(`${API_BASE_URL}get-messages.php?user_id=${user.id}`);
+      const response = await fetch(`${BASE_URL}/get-messages.php?user_id=${user.id}`);
       const json = await response.json();
       if (json.success) {
         setMessagesData(json.messages);
@@ -98,7 +101,7 @@ export default function MessageScreen() {
     setMessage(''); // Clear input immediately
 
     try {
-      const response = await fetch(`${API_BASE_URL}send-message.php`, {
+      const response = await fetch(`${BASE_URL}/send-message.php`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -135,7 +138,7 @@ export default function MessageScreen() {
           text: "Delete",
           onPress: async () => {
             try {
-              const response = await fetch(`${API_BASE_URL}delete-message.php`, {
+              const response = await fetch(`${BASE_URL}/delete-message.php`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ id }),
@@ -257,9 +260,12 @@ export default function MessageScreen() {
   return (
     <View style={styles.fullScreenWrapper}>
       {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.openDrawer && navigation.openDrawer()}>
-          <Ionicons name="menu" size={28} color={colors.white} />
+      <View
+        style={styles.header}
+        // Removed the onLayout handler
+      >
+        <TouchableOpacity onPress={() => navigation.navigate('ProductList')}>
+          <Ionicons name="arrow-back" size={28} color={colors.white} />
         </TouchableOpacity>
         <View style={styles.logoContainer}>
           <Image source={require('./assets/logo.png')} style={styles.logo} />
@@ -270,7 +276,10 @@ export default function MessageScreen() {
       </View>
 
       {/* Chat Partner Info / Sub-Nav */}
-      <View style={styles.chatPartnerInfo}>
+      <View
+        style={styles.chatPartnerInfo}
+        // Removed the onLayout handler
+      >
         <Text style={styles.chatPartnerName}>Koncepto Admin</Text>
         <Text
           style={styles.chatbotPrompt}
@@ -282,10 +291,12 @@ export default function MessageScreen() {
       </View>
 
       {/* Main content area (FlatList and Input), managed by KeyboardAvoidingView */}
+      {/* The KeyboardAvoidingView now wraps only the content that needs to move */}
       <KeyboardAvoidingView
         style={styles.keyboardAvoidingContainer} // This style makes KAV take remaining space
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={0} // No offset needed if KAV is flexible and bottomNav is absolute
+        // Use the pre-calculated fixed height for the offset
+        keyboardVerticalOffset={FIXED_CONTENT_HEIGHT}
       >
         <TouchableWithoutFeedback onPress={dismissKeyboardAndOptions}>
           {/* This wrapper ensures FlatList takes space and pushes input to bottom */}
@@ -296,11 +307,7 @@ export default function MessageScreen() {
               data={messagesData}
               keyExtractor={(item) => item.id.toString()}
               renderItem={renderMessage}
-              contentContainerStyle={[
-                styles.chatAreaContent,
-                // Padding at the bottom of the scrollable content to make space for the input area
-                { paddingBottom: INPUT_AREA_DEFAULT_HEIGHT + 10 } // +10 for a little buffer
-              ]}
+              contentContainerStyle={styles.chatAreaContent}
               onScrollBeginDrag={dismissKeyboardAndOptions}
             />
 
@@ -333,52 +340,6 @@ export default function MessageScreen() {
           </View>
         </TouchableWithoutFeedback>
       </KeyboardAvoidingView>
-
-      {/* Bottom Navigation - Always fixed at the absolute bottom of the screen */}
-      <View style={styles.bottomNav}>
-        <TouchableOpacity
-          onPress={() => {
-            setActiveTab('Home');
-            navigation.navigate('ProductList', { user });
-          }}
-          style={styles.navButton}
-        >
-          <Ionicons name="home" size={24} color={activeTab === 'Home' ? colors.white : '#B0E0A0'} />
-          <Text style={[styles.navLabel, activeTab === 'Home' && styles.activeNavLabel]}>Home</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          onPress={() => {
-            setActiveTab('Message');
-          }}
-          style={styles.navButton}
-        >
-          <Ionicons name="chatbubble" size={24} color={activeTab === 'Message' ? colors.white : '#B0E0A0'} />
-          <Text style={[styles.navLabel, activeTab === 'Message' && styles.activeNavLabel]}>Chat</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          onPress={() => {
-            setActiveTab('Carts');
-            navigation.navigate('Carts', { user });
-          }}
-          style={styles.navButton}
-        >
-          <Ionicons name="cart" size={24} color={activeTab === 'Carts' ? colors.white : '#B0E0A0'} />
-          <Text style={[styles.navLabel, activeTab === 'Carts' && styles.activeNavLabel]}>Cart</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          onPress={() => {
-            setActiveTab('Profile');
-            navigation.navigate('Profile', { user });
-          }}
-          style={styles.navButton}
-        >
-          <Ionicons name="person" size={24} color={activeTab === 'Profile' ? colors.white : '#B0E0A0'} />
-          <Text style={[styles.navLabel, activeTab === 'Profile' && styles.activeNavLabel]}>Account</Text>
-        </TouchableOpacity>
-      </View>
     </View>
   );
 }
@@ -451,12 +412,12 @@ const styles = StyleSheet.create({
   // KeyboardAvoidingView Container
   keyboardAvoidingContainer: {
     flex: 1, // Takes all available vertical space between header/chatInfo and bottomNav
+    // Important: We remove the `flex: 1` from the chatContentWrapper so that the KeyboardAvoidingView can properly resize its inner content.
   },
 
   // This wrapper lives inside KeyboardAvoidingView and manages FlatList & InputArea layout
   chatContentWrapper: {
     flex: 1, // Allows it to grow and fill KAV space
-    justifyContent: 'flex-end', // Pushes FlatList content to bottom, and InputArea to the very bottom of this wrapper
   },
 
   // Chat Area (FlatList contentContainerStyle)
@@ -464,7 +425,7 @@ const styles = StyleSheet.create({
     flexGrow: 1, // Ensures content can scroll if it's smaller than the view
     paddingTop: 10,
     paddingHorizontal: 10,
-    // paddingBottom handled dynamically in component based on INPUT_AREA_DEFAULT_HEIGHT + buffer
+    paddingBottom: 10, // A small buffer at the bottom
   },
   messageWrapper: {
     marginBottom: 5,
@@ -591,40 +552,5 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: Platform.OS === 'ios' ? 0 : 2,
-  },
-
-  // Bottom Navigation Styles
-  bottomNav: {
-    position: 'absolute', // Fixed at the bottom
-    bottom: 0,
-    width: '100%',
-    backgroundColor: colors.darkerGreen,
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    paddingVertical: 10,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -3 },
-    shadowOpacity: 0.2,
-    shadowRadius: 5,
-    elevation: 8,
-    height: BOTTOM_NAV_HEIGHT, // Explicitly set height for calculation
-  },
-  navButton: {
-    alignItems: 'center',
-    paddingVertical: 5,
-    paddingHorizontal: 10,
-    borderRadius: 10,
-  },
-  navLabel: {
-    color: '#B0E0A0',
-    fontSize: 12,
-    marginTop: 2,
-    fontWeight: '500',
-  },
-  activeNavLabel: {
-    color: colors.white,
-    fontWeight: 'bold',
   },
 });
