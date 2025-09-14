@@ -14,7 +14,6 @@ if (!$user_id) {
     exit;
 }
 
-// Get user details with school info
 $sql = "
     SELECT 
         users.first_name,
@@ -23,11 +22,8 @@ $sql = "
         users.cp_no,
         users.role,
         users.profilepic,
-        users.created_at,
-        schools.school_name,
-        schools.school_email
+        users.created_at
     FROM users
-    LEFT JOIN schools ON users.school_id = schools.id
     WHERE users.id = ?
 ";
 $stmt = $conn->prepare($sql);

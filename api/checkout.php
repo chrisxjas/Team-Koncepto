@@ -15,10 +15,9 @@ include __DIR__ . '/db_connection.php';
 // Parse incoming JSON
 $data = json_decode(file_get_contents("php://input"), true);
 $user_id = $data['user_id'] ?? null;
-$school_id = $data['school_id'] ?? null;
 $selectedItems = $data['cart_item_ids'] ?? [];
 
-if (!$user_id || !$school_id || empty($selectedItems)) {
+if (!$user_id || empty($selectedItems)) {
     echo json_encode(["success" => false, "message" => "Missing required data"]);
     exit;
 }
@@ -28,11 +27,11 @@ $now = date("Y-m-d H:i:s");
 $shipDate = date("Y-m-d H:i:s", strtotime("+3 days"));
 
 $createOrderQuery = "
-    INSERT INTO orders (user_id, school_id, Orderdate, Shipdate, status, created_at, updated_at)
-    VALUES (?, ?, ?, ?, 'to pay', ?, ?)
+    INSERT INTO orders (user_id, Orderdate, Shipdate, status, created_at, updated_at)
+    VALUES (?, ?, ?, 'to pay', ?, ?)
 ";
 $stmt = $conn->prepare($createOrderQuery);
-$stmt->bind_param("isssss", $user_id, $school_id, $now, $shipDate, $now, $now);
+$stmt->bind_param("issss", $user_id, $now, $shipDate, $now, $now);
 
 if (!$stmt->execute()) {
     echo json_encode(["success" => false, "message" => "Failed to create order"]);

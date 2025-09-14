@@ -16,7 +16,6 @@ try {
 
     if (
         !isset($data['user_id']) ||
-        !isset($data['school_id']) ||
         !isset($data['order_date']) ||
         !isset($data['ship_date']) ||
         !isset($data['payment_method']) ||
@@ -26,7 +25,6 @@ try {
     }
 
     $userId = $data['user_id'];
-    $schoolId = $data['school_id'];
     $orderDate = $data['order_date'];
     $shipDate = $data['ship_date'];
     $paymentMethod = $data['payment_method'];
@@ -37,10 +35,10 @@ try {
     $conn->begin_transaction();
 
     // 1️⃣ Insert Order
-    $orderSql = "INSERT INTO orders (user_id, school_id, Orderdate, Shipdate, status, created_at, updated_at)
-                 VALUES (?, ?, ?, ?, ?, NOW(), NOW())";
+    $orderSql = "INSERT INTO orders (user_id, Orderdate, Shipdate, status, created_at, updated_at)
+                 VALUES (?, ?, ?, ?, NOW(), NOW())";
     $orderStmt = $conn->prepare($orderSql);
-    $orderStmt->bind_param("iisss", $userId, $schoolId, $orderDate, $shipDate, $status);
+    $orderStmt->bind_param("isss", $userId, $orderDate, $shipDate, $status);
     $orderStmt->execute();
     $orderId = $orderStmt->insert_id;
 

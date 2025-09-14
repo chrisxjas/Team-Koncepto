@@ -3,6 +3,7 @@
     "typescript.validate.enable": false,
     "cSpell.words": [
         "accountcredentials",
+        "ballpens",
         "Bondpaper",
         "chatbubble",
         "chatbubbles",
@@ -10,6 +11,7 @@
         "Dela",
         "ERRMODE",
         "gcash",
+        "googleusercontent",
         "iiid",
         "iiidss",
         "iiisi",
@@ -32,6 +34,7 @@
         "profilepic",
         "recieve",
         "Shipdate",
+        "sssi",
         "sssii"
     ]
 }

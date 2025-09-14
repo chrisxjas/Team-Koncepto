@@ -1,170 +1,263 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from "react";
 import {
-  StyleSheet, Text, View, TextInput,
-  TouchableOpacity, KeyboardAvoidingView, Platform,
-  Keyboard, TouchableWithoutFeedback
-} from 'react-native';
-import { Picker } from '@react-native-picker/picker';
-import * as DocumentPicker from 'expo-document-picker';
-import { StatusBar } from 'expo-status-bar';
-import { BASE_URL } from './config'
+  StyleSheet,
+  Text,
+  View,
+  TextInput,
+  TouchableOpacity,
+  ScrollView,
+  Image,
+  Alert,
+} from "react-native";
+import * as Google from "expo-auth-session/providers/google";
+import * as WebBrowser from "expo-web-browser";
+
+WebBrowser.maybeCompleteAuthSession();
 
 export default function CreateAccount({ navigation }) {
-  const [first_Name, setFirst_Name] = useState('');
-  const [last_Name, setLast_Name] = useState('');
-  const [cpNo, setCpNo] = useState('');
-  const [schools, setSchools] = useState([]);
-  const [selectedSchool, setSelectedSchool] = useState('');
-  const [selectedFile, setSelectedFile] = useState(null);
+  const [f_name, setFName] = useState("");
+  const [l_name, setLName] = useState("");
+  const [cp_no, setCpNo] = useState("");
   const [errors, setErrors] = useState({});
 
-  useEffect(() => {
-    const fetchSchools = async () => {
-      try {
-        const response = await fetch(`${BASE_URL}/get-schools.php`);
-        const data = await response.json();
-        setSchools(data.schools || []);
-      } catch (error) {
-        console.error('Failed to fetch schools:', error);
-      }
-    };
-    fetchSchools();
-  }, []);
+  // ✅ Google Sign-In
+  const [request, response, promptAsync] = Google.useAuthRequest({
+    expoClientId: "653056599587-6eb8gn7he749jnul31218vcoj5dckdns.apps.googleusercontent.com", // Web client ID
+    androidClientId: "653056599587-31s8bnpfakee3rdqa46pegslqukl1d7g.apps.googleusercontent.com", // Android client ID
+  });
 
-  const formatCpNo = (text) => {
-    const digits = text.replace(/\D/g, '').slice(0, 11);
-    if (digits.length < 5) return digits;
-    if (digits.length < 8) return `${digits.slice(0, 4)}-${digits.slice(4)}`;
+  useEffect(() => {
+    if (response?.type === "success") {
+      const { authentication } = response;
+      Alert.alert("Google Sign-In Success", "Account created with Google!");
+      // 👉 here you can send token to backend to create account automatically
+      navigation.replace("Home"); // or navigate where you want after signup
+    }
+  }, [response]);
+
+  // ✅ format 0912-345-6789 style
+  const formatPhoneNumber = (text) => {
+    const digits = text.replace(/\D/g, "").slice(0, 11); // max 11 digits
+    if (digits.length <= 4) return digits;
+    if (digits.length <= 7)
+      return `${digits.slice(0, 4)}-${digits.slice(4)}`;
     return `${digits.slice(0, 4)}-${digits.slice(4, 7)}-${digits.slice(7)}`;
   };
 
-  const handleCpNoChange = (text) => {
-    setCpNo(formatCpNo(text));
+  const handlePhoneChange = (text) => {
+    setCpNo(formatPhoneNumber(text));
   };
 
-  const pickFile = async () => {
-    const result = await DocumentPicker.getDocumentAsync({
-      type: ['application/pdf', 'image/jpeg', 'image/png'],
-    });
-    if (result.assets && result.assets.length > 0) {
-      setSelectedFile(result.assets[0]);
-    }
-  };
-
-  const handleNext = () => {
-    const rawCpNo = cpNo.replace(/\D/g, '');
+  const handleRegister = () => {
     const newErrors = {};
-    if (!first_Name.trim()) newErrors.first_Name = 'Required';
-    if (!last_Name.trim()) newErrors.last_Name = 'Required';
-    if (!rawCpNo || rawCpNo.length !== 11) newErrors.cpNo = 'Enter valid 11-digit number';
-    if (!selectedSchool) newErrors.school = 'Select a school';
-    if (!selectedFile) newErrors.file = 'Select a file';
+
+    if (!f_name.trim()) newErrors.f_name = "First Name is required";
+    if (!l_name.trim()) newErrors.l_name = "Last Name is required";
+    if (!cp_no || cp_no.replace(/\D/g, "").length !== 11)
+      newErrors.cp_no = "Valid contact number is required";
 
     setErrors(newErrors);
 
-    if (Object.keys(newErrors).length === 0) {
-      navigation.navigate('AccountCredentials', {
-        first_name: first_Name.trim(),
-        last_name: last_Name.trim(),
-        cp_no: rawCpNo,
-        school_id: selectedSchool,
-        credentialsFile: selectedFile,
-      });
-    }
+    if (Object.keys(newErrors).length > 0) return;
+
+    navigation.navigate("AccountCredentials", {
+      f_name,
+      l_name,
+      cp_no: cp_no.replace(/\D/g, ""), // raw number
+    });
   };
 
   return (
-    <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-        <View style={styles.inner}>
-          <Text style={styles.title}>Create Account</Text>
+    <ScrollView contentContainerStyle={styles.container}>
+      {/* Koncepto Logo */}
+      <Image
+        source={require("./assets/koncepto.png")}
+        style={styles.logo}
+        resizeMode="contain"
+      />
 
-          <TextInput
-            style={[styles.input, errors.first_Name && styles.inputError]}
-            placeholder="First Name"
-            value={first_Name}
-            onChangeText={setFirst_Name}
+      <Text style={styles.title}>Create Account</Text>
+
+      {/* First Name */}
+      <TextInput
+        style={[styles.input, errors.f_name && styles.inputError]}
+        placeholder="First Name"
+        value={f_name}
+        onChangeText={(text) => {
+          setFName(text);
+          if (errors.f_name) setErrors((prev) => ({ ...prev, f_name: "" }));
+        }}
+      />
+      {errors.f_name && <Text style={styles.errorText}>{errors.f_name}</Text>}
+
+      {/* Last Name */}
+      <TextInput
+        style={[styles.input, errors.l_name && styles.inputError]}
+        placeholder="Last Name"
+        value={l_name}
+        onChangeText={(text) => {
+          setLName(text);
+          if (errors.l_name) setErrors((prev) => ({ ...prev, l_name: "" }));
+        }}
+      />
+      {errors.l_name && <Text style={styles.errorText}>{errors.l_name}</Text>}
+
+      {/* Contact Number */}
+      <TextInput
+        style={[styles.input, errors.cp_no && styles.inputError]}
+        placeholder="09**-***-****"
+        keyboardType="number-pad"
+        value={cp_no}
+        onChangeText={handlePhoneChange}
+        maxLength={13}
+      />
+      {errors.cp_no && <Text style={styles.errorText}>{errors.cp_no}</Text>}
+
+      {/* Register Button */}
+      <TouchableOpacity style={styles.registerButton} onPress={handleRegister}>
+        <Text style={styles.registerText}>Register</Text>
+      </TouchableOpacity>
+
+      {/* OR Divider */}
+      <View style={styles.orContainer}>
+        <View style={styles.line} />
+        <Text style={styles.orText}>OR</Text>
+        <View style={styles.line} />
+      </View>
+
+      {/* Google Sign Up */}
+        <TouchableOpacity
+          style={styles.googleButton}
+          disabled={!request} // disable if request is not ready
+          onPress={() => {
+            promptAsync();
+          }}
+        >
+          <Image
+            source={require("./assets/google.png")}
+            style={styles.googleLogo}
           />
-          {errors.first_Name && <Text style={styles.errorText}>{errors.first_Name}</Text>}
+          <Text style={styles.googleText}>Sign up with Google</Text>
+        </TouchableOpacity>
 
-          <TextInput
-            style={[styles.input, errors.last_Name && styles.inputError]}
-            placeholder="Last Name"
-            value={last_Name}
-            onChangeText={setLast_Name}
-          />
-          {errors.last_Name && <Text style={styles.errorText}>{errors.last_Name}</Text>}
-
-          <TextInput
-            style={[styles.input, errors.cpNo && styles.inputError]}
-            placeholder="Contact Number"
-            value={cpNo}
-            onChangeText={handleCpNoChange}
-            keyboardType="number-pad"
-            maxLength={13}
-          />
-          {errors.cpNo && <Text style={styles.errorText}>{errors.cpNo}</Text>}
-
-          <View style={[styles.dropdown, errors.school && styles.inputError]}>
-            <Picker
-              selectedValue={selectedSchool}
-              onValueChange={(value) => setSelectedSchool(value)}
-            >
-              <Picker.Item label="Select School" value="" />
-              {schools.map((school) => (
-                <Picker.Item key={school.id} label={school.school_name} value={school.id} />
-              ))}
-            </Picker>
-          </View>
-          {errors.school && <Text style={styles.errorText}>{errors.school}</Text>}
-
-          <TouchableOpacity style={styles.filePicker} onPress={pickFile}>
-            <Text>{selectedFile ? selectedFile.name : 'Select File'}</Text>
-          </TouchableOpacity>
-          {errors.file && <Text style={styles.errorText}>{errors.file}</Text>}
-
-          <TouchableOpacity style={styles.nextButton} onPress={handleNext}>
-            <Text style={styles.nextText}>Next</Text>
-          </TouchableOpacity>
-
-          <StatusBar style="auto" />
-        </View>
-      </TouchableWithoutFeedback>
-    </KeyboardAvoidingView>
+      {/* Back to Login */}
+      <TouchableOpacity
+        onPress={() => navigation.goBack()}
+        style={styles.loginLink}
+      >
+        <Text style={styles.loginText}>
+          Already have an account?{" "}
+          <Text style={styles.loginHighlight}>Login</Text>
+        </Text>
+      </TouchableOpacity>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  inner: { flex: 1, justifyContent: 'center', padding: 30, backgroundColor: '#fff' },
-  title: { fontSize: 24, fontWeight: 'bold', marginBottom: 20, textAlign: 'center' },
-  errorText: { color: 'red', fontSize: 12, marginBottom: 5 },
-  input: {
-    height: 45,
-    borderBottomWidth: 1,
-    borderBottomColor: '#999',
-    marginBottom: 15,
-    paddingHorizontal: 10,
+  container: {
+    flexGrow: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+    backgroundColor: "#f8f9fa",
   },
-  inputError: { borderBottomColor: 'red' },
-  dropdown: {
-    borderWidth: 1,
-    borderColor: '#999',
-    borderRadius: 4,
-    marginBottom: 15,
-  },
-  filePicker: {
-    borderWidth: 1,
-    borderColor: '#999',
-    borderRadius: 4,
-    padding: 12,
+  title: {
+    fontSize: 24,
+    fontWeight: "bold",
     marginBottom: 20,
+    color: "#28a745",
   },
-  nextButton: {
-    backgroundColor: '#58B32D',
-    paddingVertical: 12,
+  input: {
+    width: "100%",
+    height: 50,
+    borderWidth: 1,
+    borderColor: "#ccc",
     borderRadius: 8,
-    alignItems: 'center',
+    paddingHorizontal: 10,
+    marginBottom: 10,
+    backgroundColor: "#fff",
   },
-  nextText: { color: '#fff', fontWeight: 'bold' },
+  inputError: {
+    borderColor: "red",
+  },
+  errorText: {
+    color: "red",
+    fontSize: 12,
+    marginBottom: 8,
+    alignSelf: "flex-start",
+  },
+  registerButton: {
+    backgroundColor: "#28a745",
+    paddingVertical: 15,
+    borderRadius: 8,
+    width: "100%",
+    alignItems: "center",
+    marginTop: 10,
+  },
+  registerText: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "600",
+  },
+  orContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginVertical: 20,
+    width: "100%",
+  },
+  line: {
+    flex: 1,
+    height: 1,
+    backgroundColor: "#ccc",
+  },
+  orText: {
+    marginHorizontal: 10,
+    fontSize: 14,
+    color: "#666",
+  },
+  googleButton: {
+    backgroundColor: "#FFFFFF",
+    justifyContent: 'center',
+    flexDirection: 'row',
+    borderColor: "#28a745",
+    borderWidth: 2,
+    borderRadius: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    alignItems: "center",
+    width: "100%",
+  },
+  buttonContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  googleLogo: {
+    width: 20,
+    height: 20,
+    marginRight: 10,
+  },
+  googleText: {
+    color: "#28a745",
+    fontSize: 16,
+    fontWeight: "600",
+  },
+  loginLink: {
+    marginTop: 20,
+  },
+  loginText: {
+    fontSize: 14,
+    color: "#555",
+  },
+  loginHighlight: {
+    color: "#28a745",
+    fontWeight: "bold",
+  },
+  logo: {
+  width: 100,
+  height: 100,
+  marginBottom: 15,
+},
+
 });

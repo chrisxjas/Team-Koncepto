@@ -9,14 +9,13 @@ include __DIR__ . '/db_connection.php'; // ✅ separate DB connection
 $first_name = $_POST['first_name'] ?? '';
 $last_name  = $_POST['last_name'] ?? '';
 $cp_no      = $_POST['cp_no'] ?? '';
-$school_id  = $_POST['school_id'] ?? null;
 $email      = $_POST['email'] ?? '';
 $password   = $_POST['password'] ?? '';
 $role       = 'user';
 $credentialsPath = null;
 
 // Validation
-if (!$first_name || !$last_name || !$cp_no || !$school_id || !$email || !$password) {
+if (!$first_name || !$last_name || !$cp_no || !$email || !$password) {
     echo json_encode(["success" => false, "message" => "Missing required fields"]);
     exit();
 }
@@ -54,8 +53,8 @@ if (isset($_FILES['credentials']) && $_FILES['credentials']['error'] === UPLOAD_
 
 // Insert user
 $now = date('Y-m-d H:i:s');
-$stmt = $conn->prepare("INSERT INTO users (first_name, last_name, cp_no, school_id, email, password, credentials, role, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-$stmt->bind_param("ssssssssss", $first_name, $last_name, $cp_no, $school_id, $email, $password, $credentialsPath, $role, $now, $now);
+$stmt = $conn->prepare("INSERT INTO users (first_name, last_name, cp_no, email, password, credentials, role, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
+$stmt->bind_param("sssssssss", $first_name, $last_name, $cp_no, $email, $password, $credentialsPath, $role, $now, $now);
 
 if ($stmt->execute()) {
     echo json_encode(["success" => true, "message" => "Registered successfully"]);

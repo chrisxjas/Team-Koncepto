@@ -15,12 +15,11 @@ if (!$user_id) {
     exit;
 }
 
-// Corrected SQL with proper table names
+// Only fetch orders with status = 'order success'
 $sql = "
     SELECT 
         orders.id AS order_id,
         orders.Orderdate AS order_date,
-        orders.status,
         products.productName,
         products.brandName,
         products.image,
@@ -54,7 +53,6 @@ while ($row = $result->fetch_assoc()) {
     $orders[] = [
         "id" => $row["order_id"],
         "date" => $row["order_date"],
-        "status" => $row["status"],
         "productName" => $row["productName"],
         "brandName" => $row["brandName"],
         "image" => $row["image"],

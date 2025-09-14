@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import 'react-native-url-polyfill/auto';
@@ -14,7 +14,8 @@ import {
   KeyboardAvoidingView,
   Keyboard,
   TouchableWithoutFeedback,
-  Platform
+  Platform,
+  Animated,
 } from 'react-native';
 import Checkbox from 'expo-checkbox';
 import { StatusBar } from 'expo-status-bar';
@@ -47,7 +48,6 @@ import ViewOrderDetails from './view-order-details';
 
 const Stack = createNativeStackNavigator();
 
-// Define colors in a shared object for consistency
 const colors = {
   primaryGreen: '#4CAF50',
   darkerGreen: '#388E3C',
@@ -67,6 +67,32 @@ function LoginScreen({ navigation }) {
   const [emailError, setEmailError] = useState('');
   const [passwordError, setPasswordError] = useState('');
   const [secureText, setSecureText] = useState(true);
+
+  // Animated shift
+  const shift = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const showSub = Keyboard.addListener('keyboardDidShow', () => {
+      Animated.timing(shift, {
+        toValue: -100, // move form up
+        duration: 250,
+        useNativeDriver: true,
+      }).start();
+    });
+
+    const hideSub = Keyboard.addListener('keyboardDidHide', () => {
+      Animated.timing(shift, {
+        toValue: 0, // back to default
+        duration: 250,
+        useNativeDriver: true,
+      }).start();
+    });
+
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, [shift]);
 
   const validateEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 
@@ -137,7 +163,7 @@ function LoginScreen({ navigation }) {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-        <View style={styles.innerContainer}>
+        <Animated.View style={[styles.innerContainer, { transform: [{ translateY: shift }] }]}>
           <View style={styles.topSection}>
             <Image source={require('./assets/logo.png')} style={styles.logo} />
           </View>
@@ -186,7 +212,7 @@ function LoginScreen({ navigation }) {
           </View>
 
           <StatusBar style="auto" />
-        </View>
+        </Animated.View>
       </TouchableWithoutFeedback>
     </KeyboardAvoidingView>
   );

@@ -4,37 +4,22 @@ import {
   TouchableOpacity, Modal, TextInput
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Picker } from '@react-native-picker/picker';
 import { CommonActions } from '@react-navigation/native';
 import { BASE_URL } from './config';
 
 export default function MyProfile({ route, navigation }) {
   const { user } = route.params;
   const [profile, setProfile] = useState(null);
-  const [schools, setSchools] = useState([]);
   const [loading, setLoading] = useState(true);
   const [modalVisible, setModalVisible] = useState(false);
   const [logoutModalVisible, setLogoutModalVisible] = useState(false);
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [cpNo, setCpNo] = useState('');
-  const [selectedSchool, setSelectedSchool] = useState(null);
 
   useEffect(() => {
-    fetchSchools();
     fetchProfile();
   }, []);
-
-  const fetchSchools = () => {
-    fetch(`${BASE_URL}/get-schools.php`)
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.success) {
-          setSchools(data.schools);
-        }
-      });
-  };
-
 
   const fetchProfile = () => {
     fetch(`${BASE_URL}/get-profile.php?user_id=${user.id}`)
@@ -56,8 +41,6 @@ export default function MyProfile({ route, navigation }) {
     setFirstName(profile.first_name);
     setLastName(profile.last_name);
     setCpNo(profile.cp_no);
-    const schoolId = schools.find(s => s.school_name === profile.school_name)?.id ?? null;
-    setSelectedSchool(schoolId);
     setModalVisible(true);
   };
 
@@ -70,7 +53,6 @@ export default function MyProfile({ route, navigation }) {
         first_name: firstName,
         last_name: lastName,
         cp_no: cpNo,
-        school_id: selectedSchool,
       }),
     })
       .then((res) => res.json())
@@ -116,7 +98,9 @@ export default function MyProfile({ route, navigation }) {
       <View style={styles.profileContainer}>
         {profile.profilepic ? (
           <Image
-            source={{ uri: `http://10.214.133.17/koncepto-app/api/uploads/${profile.profilepic}` }}
+            source={{
+              uri: `${BASE_URL}/uploads/${profile.profilepic}`,
+            }}
             style={styles.profilePic}
           />
         ) : (
@@ -126,7 +110,6 @@ export default function MyProfile({ route, navigation }) {
         <Text style={styles.name}>
           {profile.first_name} {profile.last_name}
         </Text>
-        <Text style={styles.school}>{profile.school_name ?? 'No School Info'}</Text>
       </View>
 
       <View style={styles.dashboardContainer}>
@@ -149,9 +132,6 @@ export default function MyProfile({ route, navigation }) {
       </View>
 
       <View style={styles.infoSection}>
-        <Text style={styles.infoLabel}>School Email</Text>
-        <Text style={styles.infoText}>{profile.school_email ?? 'No School Email'}</Text>
-
         <Text style={styles.infoLabel}>Contact Number</Text>
         <Text style={styles.infoText}>{profile.cp_no ?? 'No Contact Number'}</Text>
 
@@ -182,15 +162,6 @@ export default function MyProfile({ route, navigation }) {
             <TextInput style={styles.input} value={firstName} onChangeText={setFirstName} placeholder="First Name" />
             <TextInput style={styles.input} value={lastName} onChangeText={setLastName} placeholder="Last Name" />
             <TextInput style={styles.input} value={cpNo} onChangeText={setCpNo} placeholder="Contact No." />
-
-            <View style={styles.pickerContainer}>
-              <Picker selectedValue={selectedSchool} onValueChange={(itemValue) => setSelectedSchool(itemValue)}>
-                <Picker.Item label="Select School" value={null} />
-                {schools.map((school) => (
-                  <Picker.Item key={school.id} label={school.school_name} value={school.id} />
-                ))}
-              </Picker>
-            </View>
 
             <TouchableOpacity style={styles.actionButton} onPress={handleSaveProfile}>
               <Text style={styles.buttonText}>Save</Text>
@@ -260,11 +231,6 @@ const styles = StyleSheet.create({
     fontSize: 22,
     fontWeight: 'bold',
     color: '#333',
-  },
-  school: {
-    fontSize: 16,
-    color: '#4CAF50',
-    fontWeight: '600',
   },
   dashboardContainer: {
     flexDirection: 'row',
@@ -346,11 +312,5 @@ const styles = StyleSheet.create({
     padding: 10,
     marginVertical: 5,
     borderRadius: 5,
-  },
-  pickerContainer: {
-    borderWidth: 1,
-    borderColor: '#ccc',
-    borderRadius: 5,
-    marginVertical: 5,
   },
 });

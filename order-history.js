@@ -20,21 +20,21 @@ export default function OrderHistory({ route, navigation }) {
   const [searchQuery, setSearchQuery] = useState('');
 
   const fetchOrderHistory = async () => {
-  try {
-    const response = await fetch(`${BASE_URL}/order-history.php?user_id=${user.id}`);
-    const resJson = await response.json();
-    if (resJson.success && resJson.orders) {
-      setOrders(resJson.orders);
-    } else {
+    try {
+      const response = await fetch(`${BASE_URL}/order-history.php?user_id=${user.id}`);
+      const resJson = await response.json();
+      if (resJson.success && resJson.orders) {
+        setOrders(resJson.orders);
+      } else {
+        setOrders([]);
+      }
+    } catch (err) {
+      console.log('Error fetching orders:', err);
       setOrders([]);
+    } finally {
+      setLoading(false);
     }
-  } catch (err) {
-    console.log('Error fetching orders:', err);
-    setOrders([]);
-  } finally {
-    setLoading(false);
-  }
-};
+  };
 
   useEffect(() => {
     fetchOrderHistory();
@@ -57,6 +57,7 @@ export default function OrderHistory({ route, navigation }) {
 
   return (
     <View style={styles.container}>
+      {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()}>
           <Ionicons name="arrow-back" size={24} color="#fff" />
@@ -65,6 +66,7 @@ export default function OrderHistory({ route, navigation }) {
         <View style={{ width: 24 }} />
       </View>
 
+      {/* Search Bar */}
       <View style={styles.searchContainer}>
         <Ionicons name="search" size={18} color="#888" />
         <TextInput
@@ -75,6 +77,7 @@ export default function OrderHistory({ route, navigation }) {
         />
       </View>
 
+      {/* Content */}
       <ScrollView style={styles.content}>
         {loading ? (
           <ActivityIndicator size="large" color="#4CAF50" style={{ marginTop: 30 }} />
@@ -84,15 +87,16 @@ export default function OrderHistory({ route, navigation }) {
           filteredOrders.map((order, index) => (
             <View key={index} style={styles.orderCard}>
               <Image
-                source={{ uri: `${BASE_URL.replace('/api', '')}/assets/${order.image}` }}
+                source={{ uri: `${BASE_URL}/uploads/${order.image}` }}
                 style={styles.productImage}
               />
               <View style={styles.detailsContainer}>
-                <Text style={styles.status}>{order.status}</Text>
+                <Text style={styles.status}>Order Success</Text>
                 <Text style={styles.orderTitle}>{order.productName}</Text>
                 <Text style={styles.orderBrand}>{order.brandName}</Text>
                 <Text style={styles.orderDetail}>Date: {formatDate(order.date)}</Text>
                 <Text style={styles.orderDetail}>Total: ₱{order.total_price}</Text>
+
                 <TouchableOpacity
                   style={styles.buyAgainButton}
                   onPress={() =>
@@ -102,7 +106,7 @@ export default function OrderHistory({ route, navigation }) {
                         id: order.product_id,
                         productName: order.productName,
                         brandName: order.brandName,
-                        price: order.total_price,
+                        price: order.unit_price || order.total_price, // use unit price if available
                         image: order.image,
                         description: order.description,
                       },
@@ -117,6 +121,7 @@ export default function OrderHistory({ route, navigation }) {
         )}
       </ScrollView>
 
+      {/* Bottom Navigation */}
       <View style={styles.bottomNav}>
         <TouchableOpacity
           onPress={() => {

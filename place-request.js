@@ -60,7 +60,6 @@ const PlaceRequest = ({ route, navigation }) => {
     try {
       const formData = new FormData();
       formData.append('user_id', user.id);
-      formData.append('school_id', user.school_id);
       formData.append('total_price', total);
       formData.append('payment_method', selectedPayment);
       formData.append('order_date', new Date().toISOString().split('T')[0]);
@@ -144,7 +143,6 @@ const PlaceRequest = ({ route, navigation }) => {
         </View>
         <Text style={styles.shippingTextBold}>{user.first_name} {user.last_name}</Text>
         <Text style={styles.shippingText}>{user.cp_no}</Text>
-        <Text style={styles.shippingText}>{user.school_name}</Text>
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollableContent}>

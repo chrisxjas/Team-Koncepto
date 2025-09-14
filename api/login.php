@@ -35,7 +35,6 @@ if ($result->num_rows === 1) {
                 "last_name" => $user["last_name"],
                 "email" => $user["email"],
                 "role" => $user["role"],
-                "school_id" => $user["school_id"],
                 "date_joined" => $user["created_at"]
             ]
         ]);

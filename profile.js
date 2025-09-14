@@ -748,7 +748,6 @@ export default function Profile({ route }) {
           </TouchableOpacity>
           <View style={{ flex: 1 }}>
             <Text style={styles.name}>{user.first_name ?? 'First Name'} {user.last_name ?? 'Last Name'}</Text>
-            <Text style={styles.school}>{user.school_name ? `${user.school_name}` : 'School: N/A'}</Text>
             <Text style={styles.email}>{user.email ?? 'email@example.com'}</Text>
           </View>
           {/* Coin Icon and Settings Icon Container */}
@@ -769,18 +768,6 @@ export default function Profile({ route }) {
             </TouchableOpacity>
           </View>
         </View>
-
-        
-
-        {/* "View Order Request" Button below header - conditionally rendered */}
-        {hasCustomOrders && (
-          <TouchableOpacity
-            style={styles.viewOrderRequestButton}
-            onPress={() => navigation.navigate('ViewCustomOrder', { user })}
-          >
-            <Text style={styles.viewOrderRequestButtonText}>View Order Request</Text>
-          </TouchableOpacity>
-        )}
 
         {/* Scrollable Content */}
         <ScrollView style={styles.scrollableContent}>
@@ -1203,12 +1190,6 @@ const styles = StyleSheet.create({
     fontSize: 18, // Made smaller
     fontWeight: 'bold',
   },
-  school: {
-    color: colors.white,
-    fontSize: 12, // Made smaller
-    marginTop: 1,
-    opacity: 0.9,
-  },
   email: {
     color: colors.white,
     fontSize: 11, // Made smaller
@@ -1227,20 +1208,6 @@ const styles = StyleSheet.create({
   settingsIcon: {
     padding: 6, // Made smaller
   },
-  viewOrderRequestButton: {
-    backgroundColor: colors.accentGreen,
-    paddingVertical: 8, // Made smaller
-    marginHorizontal: 10,
-    marginTop: 10,
-    borderRadius: 8, // Slightly smaller border radius
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 3,
-  },
     customOrderItem: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1253,11 +1220,6 @@ const styles = StyleSheet.create({
     marginLeft: 10,
     fontSize: 13,
     color: colors.textPrimary,
-  },
-  viewOrderRequestButtonText: {
-    color: colors.white,
-    fontSize: 14, // Made smaller
-    fontWeight: 'bold',
   },
   section: {
     backgroundColor: colors.white,
