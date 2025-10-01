@@ -1,36 +1,66 @@
 <?php
-header('Content-Type: application/json');
+header("Content-Type: application/json");
 header("Access-Control-Allow-Origin: *");
-header("Access-Control-Allow-Methods: GET");
+header("Access-Control-Allow-Methods: POST");
 header("Access-Control-Allow-Headers: Content-Type");
 
-// include db connection (same folder: api/)
 include __DIR__ . '/db_connection.php';
 
-// Get user_id from GET request
-$user_id = isset($_GET['user_id']) ? intval($_GET['user_id']) : 0;
+$data = json_decode(file_get_contents("php://input"), true);
 
-if ($user_id === 0) {
-    echo json_encode(['success' => false, 'message' => 'User ID is missing or invalid.']);
+if (!$data || !isset($data['user_id']) || empty($data['items'])) {
+    echo json_encode([
+        "success" => false,
+        "message" => "Invalid request. Missing user_id or items."
+    ]);
     exit();
 }
 
+$user_id = intval($data['user_id']);
+$items = $data['items'];
+
 try {
-    // Prepare SQL statement to check for custom orders for the given user_id
-    $stmt = $conn->prepare("SELECT COUNT(*) FROM custom_orders WHERE user_id = ?");
+    $conn->begin_transaction();
+
+    // Insert into custom_orders
+    $stmt = $conn->prepare("INSERT INTO custom_orders (user_id, status, created_at, updated_at) VALUES (?, 'pending', NOW(), NOW())");
     $stmt->bind_param("i", $user_id);
     $stmt->execute();
-    $stmt->bind_result($orderCount);
-    $stmt->fetch();
+    $custom_order_id = $stmt->insert_id;
     $stmt->close();
 
-    // Determine if the user has custom orders
-    $hasOrders = $orderCount > 0;
+    // Insert items
+    $stmt = $conn->prepare("INSERT INTO custom_order_items (custom_order_id, name, brand, unit, quantity, photo, description, created_at, updated_at, gathered) 
+                            VALUES (?, ?, ?, ?, ?, ?, ?, NOW(), NOW(), ?)");
 
-    echo json_encode(['success' => true, 'has_orders' => $hasOrders]);
+    foreach ($items as $item) {
+        $name = $item['name'] ?? '';
+        $brand = $item['brand'] ?? '';
+        $unit = $item['unit'] ?? '';
+        $quantity = intval($item['quantity']);
+        $photo = $item['photo'] ?? null;
+        $description = $item['description'] ?? '';
+        $gathered = isset($item['gathered']) ? intval($item['gathered']) : 0;
+
+        $stmt->bind_param("isssissi", $custom_order_id, $name, $brand, $unit, $quantity, $photo, $description, $gathered);
+        $stmt->execute();
+    }
+    $stmt->close();
+
+    $conn->commit();
+
+    echo json_encode([
+        "success" => true,
+        "message" => "Custom order submitted successfully.",
+        "custom_order_id" => $custom_order_id
+    ]);
 
 } catch (Exception $e) {
-    echo json_encode(['success' => false, 'message' => 'Error checking custom orders: ' . $e->getMessage()]);
+    $conn->rollback();
+    echo json_encode([
+        "success" => false,
+        "message" => "Error submitting order: " . $e->getMessage()
+    ]);
 } finally {
     $conn->close();
 }

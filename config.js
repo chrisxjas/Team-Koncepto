@@ -1,2 +1,1 @@
-export const BASE_URL = 'http://192.168.1.23/koncepto-app/api';
-export const ASSETS_URL = BASE_URL.replace('/api', '');
+export const BASE_URL = 'https://koncepto.me/konceptomobile';
